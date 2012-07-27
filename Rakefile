@@ -1,6 +1,6 @@
 require 'tmpdir'
 
-SERVICES_DIR = %w(atmos filesystem memcached mongodb mysql neo4j postgresql mssql rabbit redis service_broker vblob tools/backup/manager)
+SERVICES_DIR = %w(atmos couchdb echo elasticsearch filesystem memcached mongodb mysql neo4j postgresql mssql rabbit redis service_broker vblob tools/backup/manager)
 
 desc "Run integration tests."
 task "tests" do |t|
@@ -34,12 +34,12 @@ namespace "bundler" do
 
   # usage: rake bundler:update![oldref,newref]
   desc "Update git ref in Gemfile"
-  task :update!, :oref, :nref do |t, args|
+  task :update, :oref, :nref do |t, args|
     exec_in_svc_dir { |_| sh "sed -i \"s/#{args[:oref]}/#{args[:nref]}/g\" Gemfile && bundle install" }
   end
 
   desc "Dry run update"
-  task :update, :oref, :nref do |t, args|
+  task :update_dry, :oref, :nref do |t, args|
     exec_in_svc_dir { |_| sh "sed \"s/#{args[:oref]}/#{args[:nref]}/g\" Gemfile" }
   end
 
@@ -60,7 +60,6 @@ namespace "bundler" do
         else
           if File.directory? gname
             Dir.chdir(gname) { yield if block_given? }
-            `mv #{File.join(gname,gname)}*.gem .`
           else
             abort
           end
@@ -69,13 +68,12 @@ namespace "bundler" do
     end
 
     exec_in_gem_dir(working_dir, gem_name) do
-      `git fetch #{repo} #{refspec} && git checkout FETCH_HEAD && gem build #{gem_name}.gemspec`
+      abort unless system "git fetch #{repo} #{refspec} && git checkout FETCH_HEAD && gem build #{gem_name}.gemspec && gem install #{gem_name}*.gem"
     end
 
     exec_in_svc_dir do |dir|
-      `cp #{File.join(working_dir, "#{gem_name}*.gem")} vendor/cache`
       prune_git('Gemfile', gem_name)
-      sh 'bundle install --local'
+      sh "rm -f vendor/cache/#{gem_name}*.gem && bundle install"
     end
 
     FileUtils.rm_rf(working_dir)
