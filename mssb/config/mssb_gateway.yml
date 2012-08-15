@@ -1,12 +1,12 @@
 ---
 # cloud_controller_uri: api.vcap.me
 service:
-  name: rabbitmq
-  version: "2.4"
-  description: "RabbitMQ message queue"
+  name: mssb
+  version: "1.0"
+  description: "Microsoft Service Bus message queue"
   plans: ["free"]
   default_plan: free
-  tags: ["rabbitmq", "rabitmq-2.4", "message-queue", "amqp"]
+  tags: ["mssb", "mssb-1.0-beta", "message-queue", "Microsoft Service Bus"]
   timeout: 15
 ip_route: localhost
 #proxy:
@@ -14,11 +14,11 @@ ip_route: localhost
 #   port: 8080
 #   keepalive: true
 index: 0
-token: changerabbitmqtoken
+token: changemssbtoken
 logging:
   level: debug
 mbus: nats://localhost:4222
-pid: /var/vcap/sys/run/rabbit_gateway.pid
+pid: /var/vcap/sys/run/mssb_gateway.pid
 plan_management:
   plans:
     free:

@@ -4,21 +4,22 @@ gem "nats"
 gem "datamapper", ">= 0.10.2"
 gem "do_sqlite3", :require => nil
 gem "dm-sqlite-adapter"
-gem 'eventmachine', :git => 'git://github.com/cloudfoundry/eventmachine.git', :branch => 'release-0.12.11-cf'
+gem 'eventmachine', '>= 1.0.0.beta.3'
 gem "em-http-request"
 gem "json"
 gem "uuidtools"
 gem "ruby-hmac", :require => "hmac-sha1"
 gem "thin"
 gem "sinatra"
-gem "amqp"
 gem "rest-client"
+gem "win32-service"
+gem "win32-eventlog"
 
 gem 'vcap_common', :require => ['vcap/common', 'vcap/component'], :git => 'git://github.com/cloudfoundry/vcap-common.git', :ref => '1dca468ec0'
 gem 'vcap_logging', :require => ['vcap/logging'], :git => 'git://github.com/cloudfoundry/common.git', :ref => 'b96ec1192'
-gem 'vcap_services_base', :git => 'git://github.com/cloudfoundry/vcap-services-base.git', :ref => '8d7925dece'
-gem 'warden-client', :require => ['warden/client'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => 'd8334ce8a3'
-gem 'warden-protocol', :require => ['warden/protocol'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => 'd8334ce8a3'
+gem 'vcap_services_base', :git => 'git://github.com/IronFoundry/vcap-services-base.git', :branch => 'ironfoundry'
+gem 'warden-client', :require => ['warden/client'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => '21f9a32ab50'
+gem 'warden-protocol', :require => ['warden/protocol'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => '21f9a32ab50'
 
 group :test do
   gem "rake"
