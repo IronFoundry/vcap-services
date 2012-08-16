@@ -6,7 +6,7 @@ require "bundler/setup"
 require "vcap_services_base"
 
 $LOAD_PATH.unshift File.join(File.dirname(__FILE__), "..", "lib")
-require "rabbit_service/rabbit_provisioner"
+require "mssb_service/mssb_provisioner"
 
 class VCAP::Services::MSSB::Gateway < VCAP::Services::Base::Gateway
 
