@@ -26,8 +26,7 @@ class VCAP::Services::MSSB::Node
   class ProvisionedService
     include DataMapper::Resource
     property :name,        String,  :key => true # UUID
-    property :username,    String,  :required => true
-    property :password,    String,  :required => true
+    property :group,       String,  :required => true
     # property plan is deprecated
     property :plan,        Integer, :required => true
     property :plan_option, String,  :required => false
@@ -40,13 +39,13 @@ class VCAP::Services::MSSB::Node
     end
 
     def start(logger)
-      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name}"
+      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name} -ManageUser #{group}"
       exe_cmd(logger, cmd)
     end
 
     def running?(logger)
       cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Check -Name #{name}"
-      o, e, s = exe_cmd(logger, cmd)
+      s = exe_cmd(logger, cmd)
       return s.successful?
     end
 
@@ -64,6 +63,7 @@ class VCAP::Services::MSSB::Node
       else
         logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
       end
+      s
     end
   end
 
@@ -100,11 +100,28 @@ class VCAP::Services::MSSB::Node
     end
   end
 
-  def add_local_user(username, password)
+  def add_local_group(groupname)
+    net_cmd = "net localgroup #{groupname} /add"
+    exe_cmd(net_cmd)
+  end
+
+  def delete_local_group(groupname)
+    net_cmd = "net localgroup #{groupname} /delete"
+    exe_cmd(net_cmd)
+  end
+
+  def add_user_to_group(groupname, username)
+    net_cmd = "net localgroup #{groupname} #{username} /add"
+    exe_cmd(net_cmd)
+  end
+
+  def add_local_user(groupname, username, password)
     net_cmd = "net user #{username} #{password} /add /expires:never"
     exe_cmd(net_cmd)
     wmic_cmd = "wmic path Win32_UserAccount where Name='#{username}' set PasswordExpires=false"
     exe_cmd(wmic_cmd)
+    net_cmd = "net localgroup #{groupname} #{username} /add"
+    exe_cmd(net_cmd)
   end
 
   def delete_local_user(username)
@@ -117,18 +134,22 @@ class VCAP::Services::MSSB::Node
     instance.plan = 1
     instance.plan_option = ''
     if credentials
-      instance.name      = credentials["name"]
-      instance.username  = credentials["username"]
-      instance.password  = credentials["password"]
+      instance.name  = credentials["name"]
+      instance.group = credentials["group"]
     else
-      instance.name     = UUIDTools::UUID.random_create.to_s
-      instance.username = "u" + generate_credential
-      instance.password = "p" + generate_credential
+      instance.name  = UUIDTools::UUID.random_create.to_s
+      instance.group = "grp_" + generate_credential
     end
     begin
-      credentials['username'] = instance.username
-      credentials['password'] = instance.password
-      add_local_user(instance.username, instance.password)
+      add_local_group(instance.group)
+
+      user = "u" + generate_credential
+      pass = "p" + generate_credential
+      credentials['username'] = user
+      credentials['password'] = pass
+
+      add_local_user(instance.group, instance.username, instance.password)
+
       start_instance(instance)
       save_instance(instance)
     rescue => e1
@@ -156,14 +177,12 @@ class VCAP::Services::MSSB::Node
     if binding_credentials
       user = binding_credentials["user"]
       pass = binding_credentials["pass"]
+      add_user_to_group(instance.group, user)
     else
       user = "u" + generate_credential
       pass = "p" + generate_credential
+      add_local_user(instance.group, user, pass)
     end
-    # credentials = gen_admin_credentials(instance)
-    add_local_user(user, pass)
-    # TODO use Set-SBNamespace to add user?
-    set_permissions(credentials, instance.vhost, user, get_permissions_by_options(binding_options))
     gen_credentials(instance, user, pass)
   rescue => e
     # Rollback
@@ -208,7 +227,7 @@ class VCAP::Services::MSSB::Node
   def disable_instance(service_credentials, binding_credentials_list = [])
     @logger.info("disable_instance request: service_credentials=#{service_credentials}, binding_credentials=#{binding_credentials_list}")
     instance = get_instance(service_credentials["name"])
-    # TODO how to disable MSSB?
+    delete_local_group(instance.group)
     true
   rescue => e
     @logger.warn(e)
@@ -217,9 +236,10 @@ class VCAP::Services::MSSB::Node
 
   def enable_instance(service_credentials, binding_credentials_map={})
     instance = get_instance(service_credentials["name"])
-    # TODO hmmm get_permissions(gen_admin_credentials(instance), service_credentials["vhost"], service_credentials["user"])
+    # this code re-adds all the users to the local group managing the namespace
     service_credentials["hostname"] = @hostname
     service_credentials["host"] = @hostname
+    add_local_group(instance.group)
     binding_credentials_map.each do |key, value|
       bind(service_credentials["name"], value["binding_options"], value["credentials"])
       binding_credentials_map[key]["credentials"]["hostname"] = @hostname
@@ -231,7 +251,6 @@ class VCAP::Services::MSSB::Node
     nil
   end
 
-  # MSSBmq has no data to dump for migration
   def dump_instance(service_credentials, binding_credentials_list, dump_dir)
     true
   end
@@ -249,14 +268,12 @@ class VCAP::Services::MSSB::Node
     ProvisionedService.all.each do |instance|
         credentials = {
           "name" => instance.name,
+          "group" => instance.group,
           "hostname" => @hostname,
           "host" => @hostname,
-          "username" => instance.username,
-          "user" => instance.username,
         }
         res << credentials
       end
-    end
     res
   end
 
@@ -315,6 +332,7 @@ class VCAP::Services::MSSB::Node
     err_msg = []
     begin
       stop_instance(instance) if instance.running?
+      delete_local_group(instance.group)
     rescue => e
       err_msg << e.message
     end
@@ -334,12 +352,8 @@ class VCAP::Services::MSSB::Node
     varz = {}
     varz[:name] = instance.name
     varz[:plan] = @plan
-    varz[:username] = instance.username
+    varz[:group] = instance.group
     varz[:usage] = {}
-    credentials = gen_admin_credentials(instance)
-    varz[:usage][:queues_num] = list_queues(credentials, instance.vhost).size
-    varz[:usage][:exchanges_num] = list_exchanges(credentials, instance.vhost).size
-    varz[:usage][:bindings_num] = list_bindings(credentials, instance.vhost).size
     varz
   end
 
@@ -362,7 +376,9 @@ class VCAP::Services::MSSB::Node
       credentials["username"] = instance.username
       credentials["password"] = instance.admin_password
     end
-    credentials["oauth"] = "https://@hostname:4446/#{instance.name}/$STS/OAuth/"
+    credentials["sb_oauth_https"] = "https://@hostname:4446/#{instance.name}/$STS/OAuth/"
+    credentials["sb_oauth"] = "sb://@hostname:4446/#{instance.name}/"
+    credentials["sb_runtime_address"] = "sb://@hostname:9354/#{instance.name}/"
     credentials
   end
 
