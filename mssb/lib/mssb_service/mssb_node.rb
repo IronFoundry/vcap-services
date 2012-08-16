@@ -1,6 +1,6 @@
 # Copyright (c) 2009-2011 VMware, Inc.
-require "set"
-require "uuidtools"
+require 'set'
+require 'uuidtools'
 
 module VCAP
   module Services
@@ -25,49 +25,47 @@ class VCAP::Services::MSSB::Node
 
   class ProvisionedService
     include DataMapper::Resource
-    property :name,            String,      :key => true
-    property :vhost,           String,      :required => true
-    property :port,            Integer,     :unique => true
-    property :admin_port,      Integer,     :unique => true
-    property :admin_username,  String,      :required => true
-    property :admin_password,  String,      :required => true
-    # property plan is deprecated. The instances in one node have same plan.
-    property :plan,            Integer,     :required => true
-    property :plan_option,     String,      :required => false
-    property :pid,             Integer
-    property :memory,          Integer,     :required => true
-    property :status,          Integer,     :default => 0
+    property :namespace,      String,  :key => true
+    property :admin_username, String,  :required => true
+    property :admin_password, String,  :required => true
+    # property plan is deprecaed. The inces in one node have same plan.
+    property :plan,           Integer, :required => true
+    property :plan_option,    String,  :required => false
+    property :memory,         Integer, :required => true
+    property :status,         Integer, :default => 0
 
-    def listening?(interface_ip, instance_port=port)
-      begin
-        TCPSocket.open(interface_ip, instance_port).close
-        return true
-      rescue => e
-        return false
-      end
+    # TODO must build command this way to ensure executing 64-bit powershell
+    def powershell_exe
+      @powershell_exe ||= File.join(ENV['WINDIR'], 'sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    end
+
+    def listening?
+      # TODO - rewrite for MSSB
+      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Check -Name #{namespace}"
+      o, e, s = exe_cmd(logger, cmd)
+      return s.successful?
     end
 
     def running?
-      VCAP.process_running? pid
-    end
-
-    def kill(sig=:SIGTERM)
-      @wait_thread = Process.detach(pid)
-      Process.kill(sig, pid) if running?
-    end
-
-    def wait_killed(timeout=5, interval=0.2)
-      begin
-        Timeout::timeout(timeout) do
-          @wait_thread.join if @wait_thread
-          while running? do
-            sleep interval
-          end
-        end
-      rescue Timeout::Error
-        return false
-      end
+      # TODO - rewrite for MSSB
+      # Should use Get-SBNamespace to verify
       true
+    end
+
+    def remove_namespace(logger)
+      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Delete -Name #{namespace}"
+      exe_cmd(logger, cmd)
+    end
+
+    private
+    def exe_cmd(logger, cmd)
+      @logger.debug("Execute shell cmd: [#{cmd}]")
+      o, e, s = Open3.capture3(cmd)
+      if s.successful?
+        @logger.debug("Execute cmd: [#{cmd}] success.")
+      else
+        @logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
+      end
     end
   end
 
@@ -75,29 +73,35 @@ class VCAP::Services::MSSB::Node
     super(options)
 
     @config_template = ERB.new(File.read(options[:config_template]))
-    @free_ports = Set.new
-    @free_admin_ports = Set.new
-    @free_ports_mutex = Mutex.new
-    options[:port_range].each {|port| @free_ports << port}
-    options[:admin_port_range].each {|port| @free_admin_ports << port}
-    @port_gap = options[:admin_port_range].first - options[:port_range].first
+
+    # @free_ports = Set.new
+    # @free_admin_ports = Set.new
+    # @free_ports_mutex = Mutex.new
+    # options[:port_range].each {|port| @free_ports << port}
+    # options[:admin_port_range].each {|port| @free_admin_ports << port}
+    # @port_gap = options[:admin_port_range].first - options[:port_range].first
+
     @max_memory_factor = options[:max_memory_factor] || 0.5
     @local_db = options[:local_db]
-    @binding_options = nil
+    # TODO @binding_options = nil
     @base_dir = options[:base_dir]
+
     FileUtils.mkdir_p(@base_dir) if @base_dir
-    @mssb_server = @options[:mssb_server]
+    # TODO @mssb_server = @options[:mssb_server]
     @mssb_log_dir = @options[:mssb_log_dir]
     @max_clients = @options[:max_clients] || 500
-    # Timeout for rabbitmq client operations, node cannot be blocked on any rabbitmq instances.
+
+    # Timeout for mssb client operations, node cannot be blocked on any mssb instances.
     # Default value is 2 seconds.
     @mssb_timeout = @options[:mssb_timeout] || 2
     @mssb_start_timeout = @options[:mssb_start_timeout] || 5
-    @default_permissions = '{"configure":".*","write":".*","read":".*"}'
+
+    # @default_permissions = '{"configure":".*","write":".*","read":".*"}'
     @initial_username = "guest"
     @initial_password = "guest"
+
     @hostname = get_host
-    @supported_versions = ["2.4"]
+    @supported_versions = ["1.0"]
   end
 
   def pre_send_announcement
@@ -107,21 +111,18 @@ class VCAP::Services::MSSB::Node
   end
 
   def shutdown
+    # TODO: remove all namespaces
     super
     ProvisionedService.all.each { |instance|
-      @logger.debug("Try to terminate MSSBMQ server pid:#{instance.pid}")
-      instance.kill
-      instance.wait_killed ?
-        @logger.debug("MSSBMQ server pid: #{instance.pid} terminated") :
-        @logger.error("Timeout to terminate MSSBMQ server pid: #{instance.pid}")
+      @logger.debug("Try to remove MSSB namespace: #{instance.pid}")
+      instance.remove_namespace(@logger)
     }
     true
   end
 
   def announcement
     @capacity_lock.synchronize do
-      { :available_capacity => @capacity,
-        :capacity_unit => capacity_unit }
+      { :available_capacity => @capacity, :capacity_unit => capacity_unit }
     end
   end
 
@@ -320,12 +321,7 @@ class VCAP::Services::MSSB::Node
   def start_provisioned_instances
     @capacity_lock.synchronize do
       ProvisionedService.all.each do |instance|
-        @free_ports_mutex.synchronize do
-          @free_ports.delete(instance.port)
-          @free_admin_ports.delete(instance.admin_port)
-        end
         @capacity -= capacity_unit
-
         if instance.listening?(@local_ip)
           @logger.warn("Service #{instance.name} already running on port #{instance.port}")
           next
@@ -378,7 +374,7 @@ class VCAP::Services::MSSB::Node
       FileUtils.mkdir_p(config_dir)
       FileUtils.mkdir_p(log_dir)
       admin_port = instance.admin_port
-      # To allow for garbage-collection, http://www.rabbitmq.com/memory.html recommends that vm_memory_high_watermark be set to 40%.
+      # To allow for garbage-collection, http://www.mssb.com/memory.html recommends that vm_memory_high_watermark be set to 40%.
       # But since we run up to @max_capacity instances on each node, we must give each instance less than 40% of the memory.
       # Analysis of the worst case (all instances are very busy and doing GC at the same time) suggests that we should set vm_memory_high_watermark = 0.4 / @max_capacity.
       # But we do not expect to ever see this worst-case situation in practice, so we
@@ -391,7 +387,7 @@ class VCAP::Services::MSSB::Node
       file_handles_high_watermark = ((@max_clients + 2) / 0.9).to_i
       # Writes the MSSBMQ server erlang configuration file
       config = @config_template.result(Kernel.binding)
-      File.open(File.join(config_dir, "rabbitmq.config"), "w") {|f| f.write(config)}
+      File.open(File.join(config_dir, "mssb.config"), "w") {|f| f.write(config)}
       # Enable management plugin
       File.open(File.join(config_dir, "enabled_plugins"), "w") do |f|
         f.write <<EOF
@@ -408,7 +404,7 @@ EOF
         "MSSBMQ_LOG_BASE" => log_dir,
         "MSSBMQ_MNESIA_DIR" => File.join(dir, "mnesia"),
         "MSSBMQ_PLUGINS_EXPAND_DIR" => File.join(dir, "plugins"),
-        "MSSBMQ_CONFIG_FILE" => File.join(config_dir, "rabbitmq"),
+        "MSSBMQ_CONFIG_FILE" => File.join(config_dir, "mssb"),
         "MSSBMQ_ENABLED_PLUGINS_FILE" => File.join(config_dir, "enabled_plugins"),
         "MSSBMQ_SERVER_START_ARGS" => "-smp disable",
         "MSSBMQ_CONSOLE_LOG" => "reuse",

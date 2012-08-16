@@ -1,13 +1,14 @@
 PARAM (
   [Parameter(Mandatory=$false)][switch]$Create = $false,
   [Parameter(Mandatory=$false)][switch]$Delete = $false,
+  [Parameter(Mandatory=$false)][switch]$Check = $false,
   [Parameter(Mandatory=$true)][string]$Name,
   [Parameter(Mandatory=$false)][string]$ManageUser
 )
 
-if (($Create -eq $false) -and ($Delete -eq $false))
+if (($Create -eq $false) -and ($Delete -eq $false) -and ($Check -eq $false))
 {
-    Throw 'Must provide either -Create or -Delete to script!'
+    Throw 'Must provide -Create, -Delete or -Check to script!'
 }
 else
 {
@@ -19,6 +20,8 @@ else
     $installpath = (get-itemproperty "HKLM:\Software\Microsoft\Windows Azure Service Bus\1.0" INSTALLDIR).INSTALLDIR
     $installpath = $installpath.TrimEnd('\')
 
+#Load all Assemblies which are required for Microsoft.ServiceBus.Commands.dll
+
     [System.Reflection.Assembly]::LoadFrom("$installpath\Microsoft.Cloud.ServiceBus.Common.dll") | Out-Null
     [System.Reflection.Assembly]::LoadFrom("$installpath\Microsoft.Cloud.ServiceBus.Admin.dll") | Out-Null
     [System.Reflection.Assembly]::LoadFrom("$installpath\Microsoft.Cloud.ServiceBus.Data.dll") | Out-Null
@@ -28,13 +31,39 @@ else
 
     $env:Path = $env:Path + ";$installpath"
     Import-Module $installpath\Microsoft.ServiceBus.Commands.dll
+# Update-FormatData -PrependPath $installpath\Microsoft.ServiceBus.Commands.Format.ps1xml
 
     if ($Create -eq $true)
     {
-        New-SBNamespace -Name $Name -ManageUsers $ManageUser
+        try
+        {
+            New-SBNamespace -Name $Name -ManageUsers $ManageUser
+        }
+        catch
+        {
+            exit 1
+        }
+    }
+    elseif ($Delete -eq $true)
+    {
+        try
+        {
+            Remove-SBNamespace -Name $Name
+        }
+        catch
+        {
+            exit 1
+        }
     }
     else
     {
-        Remove-SBNamespace -Name $Name
+        try
+        {
+            Get-SBNamespace -Name $Name
+        }
+        catch
+        {
+            exit 1
+        }
     }
 }
