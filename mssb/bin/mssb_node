@@ -19,14 +19,6 @@ class VCAP::Services::MSSB::NodeBin < VCAP::Services::Base::NodeBin
   end
 
   def additional_config(options, config)
-    options[:port_range] = parse_property(config, "port_range", Range)
-    options[:admin_port_range] = parse_property(config, "admin_port_range", Range)
-    options[:mssb_server] = parse_property(config, "mssb_server", String)
-    options[:mssb_log_dir] = parse_property(config, "mssb_log_dir", String)
-    options[:mssb_start_timeout] = parse_property(config, "mssb_start_timeout", Integer, :optional => true)
-    options[:config_template] = File.expand_path("../../resources/mssb.config.erb", __FILE__)
-    options[:max_clients] = parse_property(config, "max_clients", Integer, :optional => true)
-    options[:max_memory_factor] = parse_property(config, "max_memory_factor", Float, :optional => true)
     options
   end
 

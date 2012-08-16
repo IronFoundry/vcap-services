@@ -6,7 +6,6 @@ base_dir: C:/var/vcap/services/mssb/instances
 mbus: nats://localhost:4222
 index: 0
 
-mssb_log_dir: C:/var/vcap/sys/log/mssb
 logging:
   level: debug
   file: C:/var/vcap/sys/log/mssb_node.log
@@ -16,7 +15,6 @@ max_memory: 16
 node_id: mssb_node_free_1
 pid: C:/var/vcap/sys/run/mssb_node.pid
 migration_nfs: /mnt/appcloud
-max_clients: 1000
 
 # TODO probably don't need
 # port_range:
