@@ -17,8 +17,9 @@ index: 0
 token: changemssbtoken
 logging:
   level: debug
+  file: C:/var/vcap/sys/log/mssb_gateway.log
 mbus: nats://localhost:4222
-pid: /var/vcap/sys/run/mssb_gateway.pid
+pid: C:/var/vcap/sys/run/mssb_gateway.pid
 plan_management:
   plans:
     free:

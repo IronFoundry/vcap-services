@@ -4,24 +4,24 @@ require "uuidtools"
 
 module VCAP
   module Services
-    module Rabbit
+    module MSSB
       class Node < VCAP::Services::Base::Node
       end
     end
   end
 end
 
-require "rabbit_service/common"
-require "rabbit_service/rabbit_error"
-require "rabbit_service/util"
+require "mssb_service/common"
+require "mssb_service/mssb_error"
+require "mssb_service/util"
 
 VALID_CREDENTIAL_CHARACTERS = ("A".."Z").to_a + ("a".."z").to_a + ("0".."9").to_a
 
-class VCAP::Services::Rabbit::Node
+class VCAP::Services::MSSB::Node
 
-  include VCAP::Services::Rabbit::Common
-  include VCAP::Services::Rabbit::Util
-  include VCAP::Services::Rabbit
+  include VCAP::Services::MSSB::Common
+  include VCAP::Services::MSSB::Util
+  include VCAP::Services::MSSB
 
   class ProvisionedService
     include DataMapper::Resource
@@ -86,13 +86,13 @@ class VCAP::Services::Rabbit::Node
     @binding_options = nil
     @base_dir = options[:base_dir]
     FileUtils.mkdir_p(@base_dir) if @base_dir
-    @rabbitmq_server = @options[:rabbitmq_server]
-    @rabbitmq_log_dir = @options[:rabbitmq_log_dir]
+    @mssb_server = @options[:mssb_server]
+    @mssb_log_dir = @options[:mssb_log_dir]
     @max_clients = @options[:max_clients] || 500
     # Timeout for rabbitmq client operations, node cannot be blocked on any rabbitmq instances.
     # Default value is 2 seconds.
-    @rabbit_timeout = @options[:rabbit_timeout] || 2
-    @rabbitmq_start_timeout = @options[:rabbitmq_start_timeout] || 5
+    @mssb_timeout = @options[:mssb_timeout] || 2
+    @mssb_start_timeout = @options[:mssb_start_timeout] || 5
     @default_permissions = '{"configure":".*","write":".*","read":".*"}'
     @initial_username = "guest"
     @initial_password = "guest"
@@ -109,11 +109,11 @@ class VCAP::Services::Rabbit::Node
   def shutdown
     super
     ProvisionedService.all.each { |instance|
-      @logger.debug("Try to terminate RabbitMQ server pid:#{instance.pid}")
+      @logger.debug("Try to terminate MSSBMQ server pid:#{instance.pid}")
       instance.kill
       instance.wait_killed ?
-        @logger.debug("RabbitMQ server pid: #{instance.pid} terminated") :
-        @logger.error("Timeout to terminate RabbitMQ server pid: #{instance.pid}")
+        @logger.debug("MSSBMQ server pid: #{instance.pid} terminated") :
+        @logger.error("Timeout to terminate MSSBMQ server pid: #{instance.pid}")
     }
     true
   end
@@ -126,7 +126,7 @@ class VCAP::Services::Rabbit::Node
   end
 
   def provision(plan, credentials = nil, version=nil)
-    raise RabbitError.new(RabbitError::RABBIT_INVALID_PLAN, plan) unless plan.to_s == @plan
+    raise MSSBError.new(MSSBError::MSSB_INVALID_PLAN, plan) unless plan.to_s == @plan
     instance = ProvisionedService.new
     instance.plan = 1
     instance.plan_option = ""
@@ -280,7 +280,7 @@ class VCAP::Services::Rabbit::Node
     nil
   end
 
-  # Rabbitmq has no data to dump for migration
+  # MSSBmq has no data to dump for migration
   def dump_instance(service_credentials, binding_credentials_list, dump_dir)
     true
   end
@@ -342,7 +342,7 @@ class VCAP::Services::Rabbit::Node
 
 
   def save_instance(instance)
-    raise RabbitError.new(RabbitError::RABBIT_SAVE_INSTANCE_FAILED, instance.inspect) unless instance.save
+    raise MSSBError.new(MSSBError::MSSB_SAVE_INSTANCE_FAILED, instance.inspect) unless instance.save
     true
   end
 
@@ -350,13 +350,13 @@ class VCAP::Services::Rabbit::Node
     # Here need check whether the object is in db or not,
     # otherwise the destory operation will persist the object from memory to db without deleting it,
     # the behavior of datamapper is doing persistent work at the end of each save/update/destroy API
-    raise RabbitError.new(RabbitError::RABBIT_DESTORY_INSTANCE_FAILED, instance.inspect) unless instance.new? || instance.destroy
+    raise MSSBError.new(MSSBError::MSSB_DESTORY_INSTANCE_FAILED, instance.inspect) unless instance.new? || instance.destroy
     true
   end
 
   def get_instance(instance_id)
     instance = ProvisionedService.get(instance_id)
-    raise RabbitError.new(RabbitError::RABBIT_FIND_INSTANCE_FAILED, instance_id) if instance.nil?
+    raise MSSBError.new(MSSBError::MSSB_FIND_INSTANCE_FAILED, instance_id) if instance.nil?
     instance
   end
 
@@ -369,7 +369,7 @@ class VCAP::Services::Rabbit::Node
     @logger.debug("Starting: #{instance.inspect} on port #{instance.port}")
 
     pid = Process.fork do
-      $0 = "Starting RabbitMQ instance: #{instance.name}"
+      $0 = "Starting MSSBMQ instance: #{instance.name}"
       close_fds
 
       dir = instance_dir(instance.name)
@@ -385,48 +385,48 @@ class VCAP::Services::Rabbit::Node
       # (a) allow a numerator different from 40%, @max_memory_factor defaults to 50%;
       # (b) make the number grow more slowly as of @max_capacity increases.
       vm_memory_high_watermark = @max_memory_factor / (1 + Math.log(@max_capacity))
-      # In RabbitMQ, If the file_handles_high_watermark is x, then the socket limitation is x * 0.9 - 2,
+      # In MSSBMQ, If the file_handles_high_watermark is x, then the socket limitation is x * 0.9 - 2,
       # to let the @max_clients be a more accurate limitation, the file_handles_high_watermark will be set to
       # (@max_clients + 2) / 0.9
       file_handles_high_watermark = ((@max_clients + 2) / 0.9).to_i
-      # Writes the RabbitMQ server erlang configuration file
+      # Writes the MSSBMQ server erlang configuration file
       config = @config_template.result(Kernel.binding)
       File.open(File.join(config_dir, "rabbitmq.config"), "w") {|f| f.write(config)}
       # Enable management plugin
       File.open(File.join(config_dir, "enabled_plugins"), "w") do |f|
         f.write <<EOF
-[rabbitmq_management].
+[mssb_management].
 EOF
       end
       # Set up the environment
       {
         "HOME" => dir,
-        "RABBITMQ_NODENAME" => "#{instance.name}@localhost",
-        "RABBITMQ_NODE_IP_ADDRESS" => @local_ip,
-        "RABBITMQ_NODE_PORT" => instance.port.to_s,
-        "RABBITMQ_BASE" => dir,
-        "RABBITMQ_LOG_BASE" => log_dir,
-        "RABBITMQ_MNESIA_DIR" => File.join(dir, "mnesia"),
-        "RABBITMQ_PLUGINS_EXPAND_DIR" => File.join(dir, "plugins"),
-        "RABBITMQ_CONFIG_FILE" => File.join(config_dir, "rabbitmq"),
-        "RABBITMQ_ENABLED_PLUGINS_FILE" => File.join(config_dir, "enabled_plugins"),
-        "RABBITMQ_SERVER_START_ARGS" => "-smp disable",
-        "RABBITMQ_CONSOLE_LOG" => "reuse",
+        "MSSBMQ_NODENAME" => "#{instance.name}@localhost",
+        "MSSBMQ_NODE_IP_ADDRESS" => @local_ip,
+        "MSSBMQ_NODE_PORT" => instance.port.to_s,
+        "MSSBMQ_BASE" => dir,
+        "MSSBMQ_LOG_BASE" => log_dir,
+        "MSSBMQ_MNESIA_DIR" => File.join(dir, "mnesia"),
+        "MSSBMQ_PLUGINS_EXPAND_DIR" => File.join(dir, "plugins"),
+        "MSSBMQ_CONFIG_FILE" => File.join(config_dir, "rabbitmq"),
+        "MSSBMQ_ENABLED_PLUGINS_FILE" => File.join(config_dir, "enabled_plugins"),
+        "MSSBMQ_SERVER_START_ARGS" => "-smp disable",
+        "MSSBMQ_CONSOLE_LOG" => "reuse",
         "ERL_CRASH_DUMP" => "/dev/null",
         "ERL_CRASH_DUMP_SECONDS" => "1",
       }.each_pair { |k, v|
         ENV[k] = v
       }
 
-      STDOUT.reopen(File.open("#{log_dir}/rabbitmq_stdout.log", "w"))
-      STDERR.reopen(File.open("#{log_dir}/rabbitmq_stderr.log", "w"))
-      exec("#{@rabbitmq_server}")
+      STDOUT.reopen(File.open("#{log_dir}/mssb_stdout.log", "w"))
+      STDERR.reopen(File.open("#{log_dir}/mssb_stderr.log", "w"))
+      exec("#{@mssb_server}")
     end
     # In parent, detch the child.
     Process.detach(pid)
     @logger.debug("Service #{instance.name} started with pid #{pid}")
-    # Wait enough time for the RabbitMQ server starting
-    (1..@rabbitmq_start_timeout).each do
+    # Wait enough time for the MSSBMQ server starting
+    (1..@mssb_start_timeout).each do
       sleep 1
       if instance.pid # An existed instance
         credentials = {"username" => instance.admin_username, "password" => instance.admin_password, "admin_port" => instance.admin_port}
@@ -442,7 +442,7 @@ EOF
         next
       end
     end
-    @logger.error("Timeout to start RabbitMQ server for instance #{instance.name}")
+    @logger.error("Timeout to start MSSBMQ server for instance #{instance.name}")
     if instance.pid
       # For existed instance, just return the pid, the instance will finish starting eventually
       # and varz will report its status
@@ -451,7 +451,7 @@ EOF
       # For new instance, stop the instance if it is running
       instance.pid = pid
       stop_instance(instance) if instance.running?
-      raise RabbitError.new(RabbitError::RABBIT_START_INSTANCE_FAILED, instance.inspect)
+      raise MSSBError.new(MSSBError::MSSB_START_INSTANCE_FAILED, instance.inspect)
     end
   end
 
@@ -479,7 +479,7 @@ EOF
     rescue => e
       err_msg << e.message
     end
-    raise RabbitError.new(RabbitError::RABBIT_CLEANUP_INSTANCE_FAILED, err_msg.inspect) if err_msg.size > 0
+    raise MSSBError.new(MSSBError::MSSB_CLEANUP_INSTANCE_FAILED, err_msg.inspect) if err_msg.size > 0
   end
 
   def generate_credential(length = 12)
@@ -542,6 +542,6 @@ EOF
   end
 
   def instance_log_dir(instance_id)
-    File.join(@rabbitmq_log_dir, instance_id)
+    File.join(@mssb_log_dir, instance_id)
   end
 end
