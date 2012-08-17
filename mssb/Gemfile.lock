@@ -7,6 +7,24 @@ GIT
       rake
 
 GIT
+  remote: git://github.com/IronFoundry/vcap-common.git
+  revision: c16d848644c997c927ada6a7c8d033c22dfb8b32
+  branch: ironfoundry
+  specs:
+    vcap_common (2.0.5)
+      em-http-request (~> 1.0.0.beta3)
+      eventmachine
+      httpclient
+      membrane (~> 0.0.2)
+      mime-types
+      multipart-post
+      nats (~> 0.4.24)
+      posix-spawn (~> 0.3.6)
+      thin
+      uuidtools
+      yajl-ruby (~> 0.8.3)
+
+GIT
   remote: git://github.com/IronFoundry/vcap-services-base.git
   revision: 2f01abbf1e76a30d07be776812cae6fadfc3f632
   branch: ironfoundry
@@ -31,23 +49,6 @@ GIT
       vcap_logging (>= 1.0.2)
       warden-client (~> 0.0.6)
       warden-protocol (~> 0.0.5)
-
-GIT
-  remote: git://github.com/cloudfoundry/vcap-common.git
-  revision: 1dca468ec017ea5d296aeac1aa2fb7a70affba63
-  ref: 1dca468ec0
-  specs:
-    vcap_common (2.0.4)
-      em-http-request (~> 1.0.0.beta3)
-      eventmachine
-      httpclient
-      membrane (~> 0.0.2)
-      mime-types
-      multipart-post
-      nats (~> 0.4.22.beta.8)
-      posix-spawn (~> 0.3.6)
-      thin (~> 1.3.1)
-      yajl-ruby (~> 0.8.3)
 
 GIT
   remote: git://github.com/cloudfoundry/warden.git

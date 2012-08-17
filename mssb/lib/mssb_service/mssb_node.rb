@@ -13,14 +13,12 @@ end
 
 require "mssb_service/common"
 require "mssb_service/mssb_error"
-require "mssb_service/util"
 
 VALID_CREDENTIAL_CHARACTERS = ("A".."Z").to_a + ("a".."z").to_a + ("0".."9").to_a
 
 class VCAP::Services::MSSB::Node
 
   include VCAP::Services::MSSB::Common
-  include VCAP::Services::MSSB::Util
   include VCAP::Services::MSSB
 
   class ProvisionedService
