@@ -16,6 +16,9 @@ node_id: mssb_node_free_1
 pid: C:/var/vcap/sys/run/mssb_node.pid
 migration_nfs: /mnt/appcloud
 
+fqdn_hosts: true # NB: very important
+op_time_limit: 10 # NB: very important
+
 # TODO probably don't need
 # port_range:
 #   first: 10001
@@ -27,5 +30,3 @@ migration_nfs: /mnt/appcloud
 # mssb_start_timeout: 5
 # z_interval: 30
 # max_nats_payload: 1048576
-# fqdn_hosts: false
-# op_time_limit: 6

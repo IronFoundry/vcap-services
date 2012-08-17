@@ -22,3 +22,7 @@ Adding user / password to local machine:
 Deleting:
 
     net user mssb_test /delete
+
+Service Bus Server setup:
+
+* Remove password complexity requirement.

@@ -37,14 +37,15 @@ class VCAP::Services::MSSB::Node
     end
 
     def start(logger)
-      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name} -ManageUser #{group}"
-      exe_cmd(logger, cmd)
+      cmd =  'start /b ' + powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name} -ManageUser #{group}" # TODO HACK to prevent timeouts
+      system(cmd)
+      # exe_cmd(logger, cmd)
     end
 
     def running?(logger)
       cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Check -Name #{name}"
       s = exe_cmd(logger, cmd)
-      return s.successful?
+      return s.success?
     end
 
     def stop(logger)
@@ -56,7 +57,7 @@ class VCAP::Services::MSSB::Node
     def exe_cmd(logger, cmd)
       logger.debug("Execute shell cmd: [#{cmd}]")
       o, e, s = Open3.capture3(cmd)
-      if s.successful?
+      if s.success?
         logger.debug("Execute cmd: [#{cmd}] success.")
       else
         logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
@@ -99,6 +100,7 @@ class VCAP::Services::MSSB::Node
   end
 
   def add_local_group(groupname)
+    @logger.debug("add_local_group(#{groupname})")
     net_cmd = "net localgroup #{groupname} /add"
     exe_cmd(net_cmd)
   end
@@ -114,6 +116,7 @@ class VCAP::Services::MSSB::Node
   end
 
   def add_local_user(groupname, username, password)
+    @logger.debug("add_local_user(#{groupname}, #{username}, #{password})")
     net_cmd = "net user #{username} #{password} /add /expires:never"
     exe_cmd(net_cmd)
     wmic_cmd = "wmic path Win32_UserAccount where Name='#{username}' set PasswordExpires=false"
@@ -131,23 +134,24 @@ class VCAP::Services::MSSB::Node
     instance = ProvisionedService.new
     instance.plan = 1
     instance.plan_option = ''
+    instance.memory = 1
     if credentials
       instance.name  = credentials["name"]
       instance.group = credentials["group"]
     else
-      instance.name  = UUIDTools::UUID.random_create.to_s
-      instance.group = "grp_" + generate_credential
+      instance.name  = 'ns' + UUIDTools::UUID.random_create.to_s.delete('-')
+      instance.group = 'grp' + generate_credential
+      credentials = Hash.new
     end
+
+    user = 'u' + generate_credential
+    pass = 'p' + generate_credential
+    credentials['username'] = user
+    credentials['password'] = pass
+
     begin
       add_local_group(instance.group)
-
-      user = "u" + generate_credential
-      pass = "p" + generate_credential
-      credentials['username'] = user
-      credentials['password'] = pass
-
-      add_local_user(instance.group, instance.username, instance.password)
-
+      add_local_user(instance.group, user, pass)
       start_instance(instance)
       save_instance(instance)
     rescue => e1
@@ -159,7 +163,7 @@ class VCAP::Services::MSSB::Node
       raise e1
     end
 
-    gen_credentials(instance)
+    gen_credentials(instance, user, pass)
   end
 
   def unprovision(instance_id, credentials_list = [])
@@ -361,22 +365,17 @@ class VCAP::Services::MSSB::Node
     "fail"
   end
 
-  def gen_credentials(instance, user = nil, pass = nil)
+  def gen_credentials(instance, user, pass)
     credentials = {
       "name" => instance.name,
       "hostname" => @hostname,
       "host" => @hostname,
+      "username" => user,
+      "password" => pass,
     }
-    if user && pass # Binding request
-      credentials["username"] = user
-      credentials["password"] = pass
-    else # Provision request
-      credentials["username"] = instance.username
-      credentials["password"] = instance.admin_password
-    end
-    credentials["sb_oauth_https"] = "https://@hostname:4446/#{instance.name}/$STS/OAuth/"
-    credentials["sb_oauth"] = "sb://@hostname:4446/#{instance.name}/"
-    credentials["sb_runtime_address"] = "sb://@hostname:9354/#{instance.name}/"
+    credentials["sb_oauth_https"] = "https://#{@hostname}:4446/#{instance.name}/$STS/OAuth/"
+    credentials["sb_oauth"] = "sb://#{@hostname}:4446/#{instance.name}/"
+    credentials["sb_runtime_address"] = "sb://#{@hostname}:9354/#{instance.name}/"
     credentials
   end
 
@@ -384,7 +383,7 @@ class VCAP::Services::MSSB::Node
   def exe_cmd(cmd)
     @logger.debug("Execute shell cmd: [#{cmd}]")
     o, e, s = Open3.capture3(cmd)
-    if s.successful?
+    if s.success?
       @logger.debug("Execute cmd: [#{cmd}] success.")
     else
       @logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
