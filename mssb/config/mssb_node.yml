@@ -17,7 +17,7 @@ pid: C:/var/vcap/sys/run/mssb_node.pid
 migration_nfs: /mnt/appcloud
 
 fqdn_hosts: true # NB: very important
-op_time_limit: 10 # NB: very important
+op_time_limit: 30 # NB: very important
 
 # TODO probably don't need
 # port_range:

@@ -33,13 +33,12 @@ class VCAP::Services::MSSB::Node
 
     # TODO must build command this way to ensure executing 64-bit powershell
     def powershell_exe
-      @powershell_exe ||= File.join(ENV['WINDIR'], 'sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+      @powershell_exe ||= File.join(ENV['WINDIR'], 'sysnative', 'WindowsPowerShell', 'v1.0', 'powershell.exe').gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
     end
 
     def start(logger)
-      cmd =  'start /b ' + powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name} -ManageUser #{group}" # TODO HACK to prevent timeouts
-      system(cmd)
-      # exe_cmd(logger, cmd)
+      cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Create -Name #{name} -ManageUser #{group}"
+      exe_cmd(logger, cmd)
     end
 
     def running?(logger)
@@ -56,13 +55,13 @@ class VCAP::Services::MSSB::Node
     private
     def exe_cmd(logger, cmd)
       logger.debug("Execute shell cmd: [#{cmd}]")
-      o, e, s = Open3.capture3(cmd)
+      o = %x(#{cmd})
+      s = $?
       if s.success?
         logger.debug("Execute cmd: [#{cmd}] success.")
       else
-        logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
+        logger.error("Execute cmd: [#{cmd}] failed. output: [#{o}]")
       end
-      s
     end
   end
 
@@ -382,11 +381,12 @@ class VCAP::Services::MSSB::Node
   private
   def exe_cmd(cmd)
     @logger.debug("Execute shell cmd: [#{cmd}]")
-    o, e, s = Open3.capture3(cmd)
+    o = %x(#{cmd})
+    s = $?
     if s.success?
       @logger.debug("Execute cmd: [#{cmd}] success.")
     else
-      @logger.error("Execute cmd: [#{cmd}] failed. stdout: [#{o}], stderr: [#{e}]")
+      @logger.error("Execute cmd: [#{cmd}] failed. output: [#{o}]")
     end
   end
 end
