@@ -30,6 +30,7 @@ class VCAP::Services::MSSB::Node
     property :plan_option, String,  :required => false
     property :memory,      Integer, :required => true
     property :status,      Integer, :default => 0
+    # TODO has n, :bindusers
 
     # TODO must build command this way to ensure executing 64-bit powershell
     def powershell_exe
@@ -64,6 +65,13 @@ class VCAP::Services::MSSB::Node
       return s.success?
     end
   end
+
+  # TODO
+  # class Binduser
+  #   include DataMapper::Resource
+  #   property :user, String, :key => true
+  #   belongs_to :ProvisionedService
+  # end
 
   def initialize(options)
     super(options)
