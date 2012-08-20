@@ -16,10 +16,10 @@ ip_route: localhost
 index: 0
 token: changemssbtoken
 logging:
-  level: debug
-  # file: C:/var/vcap/sys/log/mssb_gateway.log
+  level: error
+  # file: C:/IronFoundry/mssb/log/mssb_gateway.log
 mbus: nats://nats:nats@192.168.171.129:4222
-pid: C:/var/vcap/sys/run/mssb_gateway.pid
+pid: C:/IronFoundry/mssb/run/mssb_gateway.pid
 plan_management:
   plans:
     free:

@@ -1,22 +1,22 @@
 ---
 capacity: 200
 plan: free
-local_db: sqlite3:C:/var/vcap/services/mssb/mssb_node.db
-base_dir: C:/var/vcap/services/mssb/instances
+local_db: sqlite3:C:/IronFoundry/mssb/db/mssb_node.db
+base_dir: C:/IronFoundry/mssb/instances
 mbus: nats://nats:nats@192.168.171.129:4222
 index: 0
 
 logging:
   level: debug
-  # file: C:/var/vcap/sys/log/mssb_node.log
+  # file: C:/IronFoundry/mssb/log/mssb_node.log
 
 ip_route: 127.0.0.1
 max_memory: 16
 node_id: mssb_node_free_1
-pid: C:/var/vcap/sys/run/mssb_node.pid
+pid: C:/IronFoundry/mssb/run/mssb_node.pid
 migration_nfs: /mnt/appcloud
 
-fqdn_hosts: true # NB: very important
+fqdn_hosts: false
 op_time_limit: 30 # NB: very important
 
 # TODO probably don't need
