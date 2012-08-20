@@ -43,8 +43,7 @@ class VCAP::Services::MSSB::Node
 
     def running?(logger)
       cmd =  powershell_exe + " -ExecutionPolicy ByPass -NoLogo -NonInteractive -File managesb.ps1 -Check -Name #{name}"
-      s = exe_cmd(logger, cmd)
-      return s.success?
+      return exe_cmd(logger, cmd)
     end
 
     def stop(logger)
@@ -62,6 +61,7 @@ class VCAP::Services::MSSB::Node
       else
         logger.error("Execute cmd: [#{cmd}] failed. output: [#{o}]")
       end
+      return s.success?
     end
   end
 
@@ -332,7 +332,7 @@ class VCAP::Services::MSSB::Node
   def cleanup_instance(instance)
     err_msg = []
     begin
-      stop_instance(instance) if instance.running?
+      stop_instance(instance) if instance.running?(@logger)
       delete_local_group(instance.group)
     rescue => e
       err_msg << e.message
@@ -359,7 +359,7 @@ class VCAP::Services::MSSB::Node
   end
 
   def get_status(instance)
-    instance.running? ? "ok" : "fail"
+    instance.running?(@logger) ? "ok" : "fail"
   rescue => e
     "fail"
   end
