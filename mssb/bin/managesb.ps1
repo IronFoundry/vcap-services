@@ -2,19 +2,24 @@ PARAM (
   [Parameter(Mandatory=$false)][switch]$Create = $false,
   [Parameter(Mandatory=$false)][switch]$Delete = $false,
   [Parameter(Mandatory=$false)][switch]$Check = $false,
+  [Parameter(Mandatory=$false)][switch]$Manage = $false,
   [Parameter(Mandatory=$true)][string]$Name,
   [Parameter(Mandatory=$false)][string]$ManageUser
 )
 
-if (($Create -eq $false) -and ($Delete -eq $false) -and ($Check -eq $false))
+Set-StrictMode -Version 2.0
+
+if (($Create -eq $false) -and ($Delete -eq $false) -and
+    ($Check -eq $false) -and ($Manage -eq $false))
 {
-    Throw 'Must provide -Create, -Delete or -Check to script!'
+    Throw 'Must provide -Create, -Delete, -Check or -Manage to script!'
 }
 else
 {
-    if (($Create -eq $true) -and ([string]::IsNullOrEmpty($ManageUser)))
+    if ((($Create -eq $true) -or ($Manage -eq $true)) -and
+        ([string]::IsNullOrEmpty($ManageUser)))
     {
-        Throw '-Create requires -ManageUser!'
+        Throw '-Create or -Manage requires -ManageUser!'
     }
 
     $installpath = (get-itemproperty "HKLM:\Software\Microsoft\Windows Azure Service Bus\1.0" INSTALLDIR).INSTALLDIR
@@ -38,6 +43,17 @@ else
         try
         {
             New-SBNamespace -Name $Name -ManageUsers $ManageUser
+        }
+        catch
+        {
+            exit 1
+        }
+    }
+    elseif ($Manage -eq $true)
+    {
+        try
+        {
+            Set-SBNamespace -Name $Name -ManageUsers $ManageUser
         }
         catch
         {

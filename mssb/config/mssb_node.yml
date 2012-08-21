@@ -2,7 +2,7 @@
 capacity: 200
 plan: free
 local_db: sqlite3:C:/IronFoundry/mssb/db/mssb_node.db
-base_dir: C:/IronFoundry/mssb/instances
+base_dir: C:/IronFoundry/mssb
 mbus: nats://nats:nats@192.168.171.129:4222
 index: 0
 
@@ -18,14 +18,6 @@ migration_nfs: /mnt/appcloud
 
 fqdn_hosts: false
 op_time_limit: 30 # NB: very important
-
-# TODO probably don't need
-# port_range:
-#   first: 10001
-#   last: 20000
-# admin_port_range:
-#   first: 20001
-#   last: 30000
 
 # mssb_start_timeout: 5
 # z_interval: 30

@@ -1,6 +1,6 @@
 
-Installing curb on Windows:
-    gem install curb --version 0.7.18 --platform=x86-mingw32 -- -- --with-curl-lib=C:\proj\misc\curl-7.27.0-devel-mingw32\bin --with-curl-include=C:\proj\misc\curl-7.27.0-devel-mingw32\include
+Installing curb gem on Windows:
+    gem install curb --version 0.7.18 --platform=x86-mingw32 -- -- --with-curl-lib=C:\proj\curl-7.27.0-devel-mingw32\bin --with-curl-include=C:\proj\curl-7.27.0-devel-mingw32\include
 
 Getting a token for ServiceBusDefaultNamespace namespace via curl:
 
@@ -26,3 +26,8 @@ Deleting:
 Service Bus Server setup:
 
 * Remove password complexity requirement.
+
+.NET DEA server setup:
+
+* Copy public X509 self-signed cert from SB machine to each DEA, place in local computer "Trusted People" store.
+* Add SB hostname and IP to hosts file.
