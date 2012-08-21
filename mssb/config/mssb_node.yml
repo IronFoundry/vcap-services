@@ -16,7 +16,7 @@ node_id: mssb_node_free_1
 pid: C:/IronFoundry/mssb/run/mssb_node.pid
 migration_nfs: /mnt/appcloud
 
-fqdn_hosts: false
+fqdn_hosts: true # NB: must be true
 op_time_limit: 30 # NB: very important
 
 # mssb_start_timeout: 5
