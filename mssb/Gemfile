@@ -4,7 +4,7 @@ gem "nats"
 gem "datamapper", ">= 0.10.2"
 gem "do_sqlite3", :require => nil
 gem "dm-sqlite-adapter"
-gem 'eventmachine', '>= 1.0.0.beta.3'
+gem 'eventmachine', '>= 1.0.0.rc.4'
 gem "em-http-request"
 gem "json"
 gem "uuidtools"
@@ -16,7 +16,7 @@ gem "win32-service"
 gem "win32-eventlog"
 
 gem 'vcap_common', :require => ['vcap/common', 'vcap/component'], :git => 'git://github.com/IronFoundry/vcap-common.git', :branch => 'ironfoundry'
-gem 'vcap_logging', :require => ['vcap/logging'], :git => 'git://github.com/IronFoundry/common.git', :branch => 'ironfoundry-win32'
+gem 'vcap_logging', :require => ['vcap/logging'], :git => 'git://github.com/IronFoundry/common.git', :branch => 'ironfoundry'
 gem 'vcap_services_base', :git => 'git://github.com/IronFoundry/vcap-services-base.git', :branch => 'ironfoundry'
 gem 'warden-client', :require => ['warden/client'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => '21f9a32ab50'
 gem 'warden-protocol', :require => ['warden/protocol'], :git => 'git://github.com/cloudfoundry/warden.git', :ref => '21f9a32ab50'
