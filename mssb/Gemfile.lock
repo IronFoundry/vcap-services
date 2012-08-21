@@ -1,7 +1,7 @@
 GIT
   remote: git://github.com/IronFoundry/common.git
   revision: 32d0814121b1354ba7c4ef1cb9e51ebef20c7c51
-  branch: ironfoundry-win32
+  branch: ironfoundry
   specs:
     vcap_logging (1.0.2)
       rake
@@ -222,7 +222,7 @@ DEPENDENCIES
   dm-sqlite-adapter
   do_sqlite3
   em-http-request
-  eventmachine (>= 1.0.0.beta.3)
+  eventmachine (>= 1.0.0.rc.4)
   json
   nats
   rake
