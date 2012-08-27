@@ -4,7 +4,7 @@ module VCAP
     module Mssql
       module Common
         def service_name
-          "MSSQL" # TODO HUH T3CF
+          "MSSQLaaS"
         end
       end
     end

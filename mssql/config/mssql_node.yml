@@ -1,34 +1,32 @@
 ---
-local_db: sqlite3:C:/var/vcap/services/mssql/mssql_node.db
-
-base_dir: C:/var/vcap/services/mssql
-
+capacity: 200
+plan: free
+local_db: sqlite3:C:/IronFoundry/mssql/db/mssql_node.db
+base_dir: C:/IronFoundry/mssql
 sqlcmd_bin: 'C:/Program Files/Microsoft SQL Server/100/Tools/Binn/sqlcmd.exe'
-
 ip_route: 127.0.0.1
-
 mbus: nats://127.0.0.1:4222
-
 index: 0
-
 logging:
   level: debug
-  file: C:/var/vcap/sys/log/mssql_node.log
-
-pid: C:/var/vcap/sys/run/mssql_node.pid
-
-available_storage: 1024
-
+  file: C:/IronFoundry/mssql/log/mssql_node.log
+pid: C:/IronFoundry/mssql/run/mssql_node.pid
 node_id: mssql_node_1
-
 max_db_size: 20
 max_long_query: 3
 max_long_tx: 30
-
+kill_long_tx: true
+max_user_conns: 20
 migration_nfs: C:/var/mnt/migration
-
 mssql:
   host: 127.0.0.1
   port: 1433
   user: sa
   pass: Password123
+connection_pool_size: 5
+connection_wait_timeout: 10
+
+# z_interval: 30
+# max_nats_payload: 1048576
+# fqdn_hosts: false
+# op_time_limit: 6

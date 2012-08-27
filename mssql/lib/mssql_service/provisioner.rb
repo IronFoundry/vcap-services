@@ -1,16 +1,27 @@
-# Copyright (c) 2009-2011 VMware, Inc.
-$LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', '..', '..', 'base', 'lib')
-
-require 'base/provisioner'
 require 'mssql_service/common'
 
-class VCAP::Services::Mssql::Provisioner < VCAP::Services::Base::Provisioner
+class VCAP::Services::MSSQL::Provisioner < VCAP::Services::Base::Provisioner
+  include VCAP::Services::MSSQL::Common
 
-  include VCAP::Services::Mssql::Common
+  # TODO
+  # def create_snapshot_job
+  #   VCAP::Services::MSSQL::Snapshot::CreateSnapshotJob
+  # end
 
-  def node_score(node)
-    1 # TODO T3CF figure out scoring
-    # node['available_storage'] if node
-  end
+  # def rollback_snapshot_job
+  #   VCAP::Services::MSSQL::Snapshot::RollbackSnapshotJob
+  # end
+
+  # def delete_snapshot_job
+  #   VCAP::Services::Base::AsyncJob::Snapshot::BaseDeleteSnapshotJob
+  # end
+
+  # def create_serialized_url_job
+  #   VCAP::Services::Base::AsyncJob::Serialization::BaseCreateSerializedURLJob
+  # end
+
+  # def import_from_url_job
+  #   VCAP::Services::MSSQL::Serialization::ImportFromURLJob
+  # end
 
 end

@@ -1,32 +1,43 @@
 ---
-cloud_controller_uri: http://api.vcap.me
-
+cloud_controller_uri: api.vcap.me
 service:
   name: mssql
   version: "10.50.2500"
-  description: 'MS SQL database service'
+  description: 'Microsoft SQL Server database'
   plans: ['free']
-  tags: ['mssql', 'SQL Server 2008 R2', 'relational']
-
-ip_route: 127.0.0.1
-
+  tags: ['mssql', 'mssql-10.50.2500', 'SQL Server 2008 R2', 'relational']
+ip_route: localhost
 #proxy:
 #   host: proxy
 #   port: 8080
 #   keepalive: true
-
 index: 0
-
-token: "0xdeadbeef"
-
+token: changemssqltoken
 logging:
   level: debug
-  file: C:/var/sys/log/mssql_gateway.log
-
-mbus: nats://127.0.0.1:4222
-
-pid: C:/var/vcap/sys/run/mssql_service.pid
-
+  file: C:/IronFoundry/mssql/log/mssql_gateway.log
+mbus: nats://localhost:4222
+pid: C:/IronFoundry/mssql/run/mssql_service.pid
 node_timeout: 2
 
-# allow_over_provisioning: false
+# TODO
+# resque:
+#   host: localhost
+#   port: 5454
+# download_url_template: http://dl.vcap.me/serialized/%{service}/%{name}/snapshots/%{snapshot_id}?token=%{token}
+ 
+plan_management:
+  plans:
+    free:
+      low_water: 10
+      high_water: 180
+      lifecycle:
+        snapshot:
+          quota: 5
+        serialization: enable
+        job: enable
+      #allow_over_provisioning: false
+
+# z_interval: 30
+# check_orphan_interval: 3600
+# double_check_orphan_interval: 300

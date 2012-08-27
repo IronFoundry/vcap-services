@@ -3,9 +3,8 @@
 # Copyright (c) 2009-2011 VMware, Inc.
 
 ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../../Gemfile", __FILE__)
-
-$LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', '..', 'base', 'lib')
-require 'base/node_bin'
+require 'bundler/setup'
+require 'vcap_services_base'
 
 $LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
 require "mssql_service/node"
@@ -17,17 +16,22 @@ class VCAP::Services::Mssql::NodeBin < VCAP::Services::Base::NodeBin
   end
 
   def default_config_file
-    File.join(File.dirname(__FILE__), '..', 'config', 'mssql_node.yml')
+    config_base_dir = ENV["CLOUD_FOUNDRY_CONFIG_PATH"] || File.join(File.dirname(__FILE__), '..', 'config')
+    File.join(config_base_dir, 'mssql_node.yml')
   end
 
   def additional_config(options, config)
     options[:mssql] = parse_property(config, "mssql", Hash)
     options[:sqlcmd_bin] = parse_property(config, "sqlcmd_bin", String)
-    # options[:available_storage] = parse_property(config, "available_storage", Integer)
-    # options[:max_db_size] = parse_property(config, "max_db_size", Integer)
-    # options[:max_long_query] = parse_property(config, "max_long_query", Integer)
-    # options[:max_long_tx] = parse_property(config, "max_long_tx", Integer)
-    # options[:socket] = parse_property(config, "socket", String, :optional => true)
+    options[:mysqldump_bin] = parse_property(config, "mysqldump_bin", String)
+    options[:gzip_bin] = parse_property(config, "gzip_bin", String)
+    options[:max_db_size] = parse_property(config, "max_db_size", Integer)
+    options[:max_long_query] = parse_property(config, "max_long_query", Integer)
+    options[:max_long_tx] = parse_property(config, "max_long_tx", Integer)
+    options[:kill_long_tx] = parse_property(config, "kill_long_tx", Boolean)
+    options[:max_user_conns] = parse_property(config, "max_user_conns", Integer, :optional => true)
+    options[:connection_pool_size] = parse_property(config, "connection_pool_size", Integer, :optional => true)
+    options[:connection_wait_timeout] = parse_property(config, "connection_wait_timeout", Integer, :optional => true)
     options
   end
 
