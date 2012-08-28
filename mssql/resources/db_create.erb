@@ -1,14 +1,14 @@
 -- vim:syntax=off:ts=2:sw=2
 
-USE [master]
-GO
-
 :on error exit
 :out <%= sqlcmd_output_file %>
 :error <%= sqlcmd_error_output_file %>
 
 :setvar DATA_DIR "<%= base_dir %>\sqldata"
-:setvar DB_NAME "<%= database_name %>"
+:setvar DB_NAME "<%= db_name %>"
+
+USE [master]
+GO
 
 EXEC sys.xp_create_subdir '$(DATA_DIR)'
 GO
@@ -16,13 +16,13 @@ GO
 CREATE DATABASE [$(DB_NAME)] ON PRIMARY (
     NAME = N'$(DB_NAME)',
     FILENAME = N'$(DATA_DIR)\$(DB_NAME).mdf',
-    SIZE = <%= database_initial_size_kb %>KB,
-    MAXSIZE = <%= database_max_size_mb %>MB,
+    SIZE = <%= db_initial_size_kb %>KB,
+    MAXSIZE = <%= db_max_size_mb %>MB
 ) LOG ON (
     NAME = N'$(DB_NAME)_log',
     FILENAME = N'$(DATA_DIR)\$(DB_NAME)_log.ldf',
-    SIZE = <%= database_initial_log_size_kb %>KB,
-    MAXSIZE = <%= database_max_log_size_mb %>MB
+    SIZE = <%= db_initial_log_size_kb %>KB,
+    MAXSIZE = <%= db_max_log_size_mb %>MB
 )
 GO
 
@@ -63,23 +63,3 @@ ALTER DATABASE [$(DB_NAME)] SET RECOVERY FULL
 ALTER DATABASE [$(DB_NAME)] SET RECURSIVE_TRIGGERS OFF 
 ALTER DATABASE [$(DB_NAME)] SET TRUSTWORTHY OFF 
 GO
-
-/*
-http://msdn.microsoft.com/en-us/library/ms189631(v=sql.105)
-EXEC sp_configure 'show advanced options', 1
-GO
-RECONFIGURE
-GO
-EXEC sp_configure 'fill factor (%)', 90
-GO
-RECONFIGURE
-GO
-EXEC sp_configure 'lightweight pooling', 1
-GO
-RECONFIGURE
-GO
-EXEC sp_configure 'priority boost', 1
-GO
-RECONFIGURE
-GO
-*/

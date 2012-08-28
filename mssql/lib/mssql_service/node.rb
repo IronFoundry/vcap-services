@@ -8,12 +8,25 @@ require 'datamapper'
 require 'uuidtools'
 require 'open3'
 require 'tiny_tds'
+require 'tempfile'
+
+require 'template_data'
 
 module VCAP
   module Services
     module Mssql
       class Node < VCAP::Services::Base::Node
       end
+    end
+  end
+end
+
+# TODO
+class File
+  class << self
+    alias orig_join join
+    def join(*args)
+      orig_join(*args).gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
     end
   end
 end
@@ -46,44 +59,18 @@ class VCAP::Services::Mssql::Node
     super(options)
 
     @mssql_config = options[:mssql]
-    @sqlcmd_bin = options[:sqlcmd_bin]
+    @sqlcmd_bin = verify_sqlcmd(options)
+    @db_create_template = options[:db_create_template]
     @connection_wait_timeout = options[:connection_wait_timeout]
 
     @base_dir = options[:base_dir]
     FileUtils.mkdir_p(@base_dir) if @base_dir
 
-    # TODO @available_storage = options[:available_storage] * 1024 * 1024
-    @available_storage = 1024 * 1024 * 1024
-
-    # ProvisionedService.all.each do |provisioned_service|
-    #   @available_storage -= storage_for_service(provisioned_service)
-    # end
-
-    @long_queries_killed=0
-    @long_tx_killed=0
-    @provision_served=0
-    @binding_served=0
   end
 
   def pre_send_announcement
     @tds_client = mssql_connect
     EM.add_periodic_timer(KEEP_ALIVE_INTERVAL) { mssql_keep_alive }
-
-    # keep_alive_interval = KEEP_ALIVE_INTERVAL
-    # keep_alive_interval = [keep_alive_interval, @connection_wait_timeout.to_f/2].min if @connection_wait_timeout
-    # EM.add_periodic_timer(@max_long_query.to_f/2) { EM.defer{kill_long_queries} } if @max_long_query > 0
-    # if (@max_long_tx > 0)
-    #   EM.add_periodic_timer(@max_long_tx.to_f/2) { EM.defer{kill_long_transaction} }
-    # else
-    #   @logger.info("long transaction killer is disabled.")
-    # end
-    # EM.add_periodic_timer(STORAGE_QUOTA_INTERVAL) { EM.defer {enforce_storage_quota} }
-
-    @queries_served = 0
-    @qps_last_updated = 0
-
-    # initialize qps counter
-    # TODO get_qps
 
     DataMapper.setup(:default, options[:local_db])
     DataMapper::auto_upgrade!
@@ -99,22 +86,21 @@ class VCAP::Services::Mssql::Node
 
   def announcement
     @capacity_lock.synchronize do
-      { :available_capacity => @capacity,
-        :capacity_unit => capacity_unit }
+      { :available_capacity => @capacity, :capacity_unit => capacity_unit }
     end
   end
 
-  def check_db_consistency()
+  def check_db_consistency
 
     db_names = []
-    result = client.execute('exec [master].[sys].[sp_databases]')
+    result = @tds_client.execute('exec [master].[sys].[sp_databases]')
     result.each do |row|
       db_names << row['DATABASE_NAME']
     end
 
     db_list = []
     db_names.each do |db_name|
-      usr_rslt = client.execute("exec [#{db_name}].[sys].[sp_helpuser]")
+      usr_rslt = @tds_client.execute("exec [#{db_name}].[sys].[sp_helpuser]")
       usr_rslt.each do |row|
         db_user = row['UserName']
         db_list << [ db_name, db_user ]
@@ -129,14 +115,6 @@ class VCAP::Services::Mssql::Node
       end
     end
   end
-
-  # def storage_for_service(provisioned_service)
-  #   case provisioned_service.plan
-  #   when :free then @max_db_size
-  #   else
-  #     raise MssqlError.new(MssqlError::MSSQL_INVALID_PLAN, provisioned_service.plan)
-  #   end
-  # end
 
   def mssql_connect
     host, user, password, port = %w{host user pass port}.map { |opt| @mssql_config[opt] }
@@ -157,7 +135,6 @@ class VCAP::Services::Mssql::Node
     exit
   end
 
-  #keep connection alive, and check db liveness
   def mssql_keep_alive
     if @tds_client.active?
       result = @tds_client.execute('SELECT @@VERSION AS [VERSION]')
@@ -173,50 +150,15 @@ class VCAP::Services::Mssql::Node
     @tds_client = mssql_connect
   end
 
-  def kill_long_queries
-    @logger.debug("kill_long_queries NOOP")
-  #   process_list = @tds_client.list_processes
-  #   process_list.each do |proc|
-  #     thread_id, user, _, db, command, time, _, info = proc
-  #     if (time.to_i >= @max_long_query) and (command == 'Query') and (user != 'root') then
-  #       @tds_client.query("KILL QUERY " + thread_id)
-  #       @logger.warn("Killed long query: user:#{user} db:#{db} time:#{time} info:#{info}")
-  #       @long_queries_killed += 1
-  #     end
-  #   end
-  # rescue TinyTds::Error => e
-  #   @logger.error("MSSQL error: #{e.to_s}")
-  end
-
-  def kill_long_transaction
-    @logger.debug("kill_long_transaction NOOP")
-  #   query_str = "SELECT * from ("+
-  #               "  SELECT trx_started, id, user, db, info, TIME_TO_SEC(TIMEDIFF(NOW() , trx_started )) as active_time" +
-  #               "  FROM information_schema.INNODB_TRX t inner join information_schema.PROCESSLIST p " +
-  #               "  ON t.trx_mssql_thread_id = p.ID " +
-  #               "  WHERE trx_state='RUNNING' and user!='root' " +
-  #               ") as inner_table " +
-  #               "WHERE inner_table.active_time > #{@max_long_tx}"
-  #   result = @tds_client.query(query_str)
-  #   result.each do |trx|
-  #     trx_started, id, user, db, info, active_time = trx
-  #     @tds_client.query("KILL QUERY #{id}")
-  #     @logger.warn("Kill long transaction: user:#{user} db:#{db} thread:#{id} info:#{info} active_time:#{active_time}")
-  #     @long_tx_killed +=1
-  #   end
-  # rescue => e
-  #   @logger.error("Error during kill long transaction: #{e}.")
-  end
-
   def provision(plan, credential=nil)
     provisioned_service = ProvisionedService.new
     if credential
-      name, user, password = %w(name user password).map{|key| credential[key]}
+      name, user, password = %w(name user password).map{ |key| credential[key] }
       provisioned_service.name = name
       provisioned_service.user = user
       provisioned_service.password = password
     else
-      # mssql database name should start with alphabet character
+      # Note: mssql database name should start with alphabet character
       provisioned_service.name = 'd' + UUIDTools::UUID.random_create.to_s.delete('-')
       provisioned_service.user = 'u' + generate_credential
       provisioned_service.password = 'p' + generate_credential
@@ -231,7 +173,6 @@ class VCAP::Services::Mssql::Node
     end
     response = gen_credential(provisioned_service.name, provisioned_service.user, provisioned_service.password)
 
-    # TODO T3CF @provision_served += 1
     return response
   rescue => e
     delete_database(provisioned_service)
@@ -247,17 +188,19 @@ class VCAP::Services::Mssql::Node
     # Delete all bindings, ignore not_found error since we are unprovision
     begin
       credentials.each{ |credential| unbind(credential)} if credentials
-    rescue =>e
+    rescue => e
       # ignore
     end
+
     delete_database(provisioned_service)
-    # TODO storage = storage_for_service(provisioned_service)
-    # @available_storage += storage
+
     if not provisioned_service.destroy
       @logger.error("Could not delete service: #{provisioned_service.errors.inspect}")
       raise MssqlError.new(MysqError::MSSQL_LOCAL_DB_ERROR)
     end
+
     @logger.debug("Successfully fulfilled unprovision request: #{name}")
+
     true
   end
 
@@ -280,7 +223,6 @@ class VCAP::Services::Mssql::Node
       create_database_user(name, binding[:user], binding[:password])
       response = gen_credential(name, binding[:user], binding[:password])
       @logger.debug("Bind response: #{response.inspect}")
-      @binding_served += 1
       return response
     rescue => e
       delete_database_user(name, binding[:user]) if binding
@@ -303,38 +245,31 @@ class VCAP::Services::Mssql::Node
 
   def create_database(provisioned_service)
     name, password, user = [:name, :password, :user].map { |field| provisioned_service.send(field) }
-    begin
 
-      start = Time.now
+    start = Time.now
 
-      @logger.debug("Creating: #{provisioned_service.inspect}")
+    @logger.debug("Creating: #{provisioned_service.inspect}")
 
-      db_file_name = File.join(@base_dir, "#{name}.mdf").gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
-      db_log_file_name = File.join(@base_dir, "#{name}_log.ldf").gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
+    sqlcmd_output_file
+    sqlcmd_error_output_file
+    base_dir
+    database_name
+    database_initial_size_kb
+    database_max_size_mb
+    database_initial_log_size_kb
+    database_max_log_size_mb
+    # TODO MAXSIZE from config
+    create_statement = "CREATE DATABASE [#{name}] ON PRIMARY (NAME = N'#{name}', FILENAME = N'#{db_file_name}', SIZE = 4096KB, MAXSIZE = 64MB) LOG ON (NAME = N'#{name}_log', FILENAME = N'#{db_log_file_name}', SIZE = 4096KB, MAXSIZE = 128MB)"
 
-      # TODO MAXSIZE from config
-      create_statement = "CREATE DATABASE [#{name}] ON PRIMARY (NAME = N'#{name}', FILENAME = N'#{db_file_name}', SIZE = 4096KB, MAXSIZE = 64MB) LOG ON (NAME = N'#{name}_log', FILENAME = N'#{db_log_file_name}', SIZE = 4096KB, MAXSIZE = 128MB)"
+    create_database_user(name, user, password)
 
-      # TODO T3CF can't use parameters here due to use of sp_prepexec underneath, hmmm
-      @logger.debug("CREATE STATEMENT: #{create_statement}")
-      @tds_client.do(create_statement)
-
-      create_database_user(name, user, password)
-
-      # TODO storage = storage_for_service(provisioned_service)
-      # @available_storage -= storage
-      @logger.debug("Done creating #{provisioned_service.inspect}. Took #{Time.now - start}.")
-
-    rescue TinyTds::Error => e
-      @logger.warn("Could not create database or user: #{e.to_s}")
-      throw
-    end
+    @logger.debug("Done creating #{provisioned_service.inspect}. Took #{Time.now - start}.")
   end
 
   def create_database_user(name, user, password)
       @logger.info("Creating credentials: #{user}/#{password} for database #{name}")
-      @tds_client.do("CREATE LOGIN [#{user}] WITH PASSWORD = '#{password}', DEFAULT_DATABASE=[#{name}], CHECK_POLICY=OFF") # TODO T3CF can't use parameters here due to use of sp_prepexec underneath, hmmm
-      @tds_client.do("USE [#{name}]; CREATE USER [#{user}] FOR LOGIN [#{user}]; EXEC [#{name}].[sys].[sp_addrolemember] 'db_owner', '#{user}'")
+      @tds_client.execute("CREATE LOGIN [#{user}] WITH PASSWORD = '#{password}', DEFAULT_DATABASE=[#{name}], CHECK_POLICY=OFF")
+      @tds_client.execute("USE [#{name}]; CREATE USER [#{user}] FOR LOGIN [#{user}]; EXEC [#{name}].[sys].[sp_addrolemember] 'db_owner', '#{user}'")
   end
 
   def delete_database(provisioned_service)
@@ -483,16 +418,52 @@ class VCAP::Services::Mssql::Node
     []
   end
 
-  # shell CMD wrapper and logger
-  def exe_cmd(cmd, stdin=nil)
-    @logger.debug("Execute shell cmd:[#{cmd}]")
-    o, e, s = Open3.capture3(cmd, :stdin_data => stdin)
-    if s.exitstatus == 0
-      @logger.info("Execute cmd:[#{cmd}] successd.")
+  def verify_sqlcmd(options)
+
+    sqlcmd_bin = options[:sqlcmd_bin]
+
+    if sqlcmd_bin.nil?
+      sqlcmd_bin = search_path_for('sqlcmd.exe')
+      if sqlcmd_bin.nil?
+        raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+      end
+    end
+
+    begin
+      o, e, s = exe_cmd(sqlcmd_bin, '-?')
+      if s.nil? or not s.success?
+        raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+      end
+    rescue Errno::ENOENT => e
+      @logger.error("Command not found: [#{e.to_s}]")
+      raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+    end
+
+    sqlcmd_bin
+  end
+
+  def exe_cmd(cmd, args)
+    if cmd.include?(' ') and not cmd.start_with?('"')
+      cmd = "\"#{cmd}\""
+    end
+    @logger.debug("Execute shell cmd: [#{cmd} #{args}]")
+    o, e, s = Open3.capture3("#{cmd} #{args}")
+    if s.success?
+      @logger.debug('Execute cmd success.')
     else
-      @logger.error("Execute cmd:[#{cmd}] failed. Stdin:[#{stdin}], stdout: [#{o}], stderr:[#{e}]")
+      @logger.error("Execute cmd failed. stdout: [#{o}], stderr:[#{e}]")
     end
     return [o, e, s]
+  end
+
+  def search_path_for(cmd)
+    path_entries = ENV['PATH'].split(';')
+    path_entries.each do |pe|
+      test_path = File.join(pe, cmd)
+      if File.exists?(test_path)
+        return test_path
+      end
+    end
   end
 
   def gen_credential(name, user, passwd)

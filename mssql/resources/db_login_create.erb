@@ -1,0 +1,13 @@
+﻿-- vim:syntax=off:ts=2:sw=2
+
+:on error exit
+:out <%= sqlcmd_output_file %>
+:error <%= sqlcmd_error_output_file %>
+
+CREATE LOGIN [<%= db_user %>] WITH PASSWORD = '<%= db_password %>', DEFAULT_DATABASE=[<%= db_name %>], CHECK_POLICY=OFF"
+GO
+USE [<%= db_name %>]
+GO
+CREATE USER [<%= db_user %>] FOR LOGIN [<%= db_user %>]
+EXEC [<%= db_name %>].[sys].[sp_addrolemember] 'db_owner', '<%= db_user %>'
+GO
