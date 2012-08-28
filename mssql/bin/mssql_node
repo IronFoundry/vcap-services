@@ -9,10 +9,10 @@ require 'vcap_services_base'
 $LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
 require "mssql_service/node"
 
-class VCAP::Services::Mssql::NodeBin < VCAP::Services::Base::NodeBin
+class VCAP::Services::MSSQL::NodeBin < VCAP::Services::Base::NodeBin
 
   def node_class
-    VCAP::Services::Mssql::Node
+    VCAP::Services::MSSQL::Node
   end
 
   def default_config_file
@@ -42,4 +42,4 @@ class VCAP::Services::Mssql::NodeBin < VCAP::Services::Base::NodeBin
 
 end
 
-VCAP::Services::Mssql::NodeBin.new.start
+VCAP::Services::MSSQL::NodeBin.new.start

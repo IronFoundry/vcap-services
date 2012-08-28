@@ -9,7 +9,7 @@ mbus: nats://127.0.0.1:4222
 index: 0
 logging:
   level: debug
-  file: C:/IronFoundry/mssql/log/mssql_node.log
+  # file: C:/IronFoundry/mssql/log/mssql_node.log
 pid: C:/IronFoundry/mssql/run/mssql_node.pid
 node_id: mssql_node_1
 

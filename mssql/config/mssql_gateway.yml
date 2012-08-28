@@ -15,8 +15,8 @@ index: 0
 token: changemssqltoken
 logging:
   level: debug
-  file: C:/IronFoundry/mssql/log/mssql_gateway.log
-mbus: nats://localhost:4222
+  # file: C:/IronFoundry/mssql/log/mssql_gateway.log
+mbus: nats://nats:nats@192.168.171.129:4222
 pid: C:/IronFoundry/mssql/run/mssql_service.pid
 node_timeout: 2
 

@@ -15,10 +15,10 @@ require 'base/node_bin'
 $LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
 require "mssql_service/node"
 
-class VCAP::Services::Mssql::NodeBin < VCAP::Services::Base::NodeBin
+class VCAP::Services::MSSQL::NodeBin < VCAP::Services::Base::NodeBin
 
   def node_class
-    VCAP::Services::Mssql::Node
+    VCAP::Services::MSSQL::Node
   end
 
   def default_config_file
@@ -42,7 +42,7 @@ class Daemon
   def service_main
     begin
       @event_log = EventLog.open('Application') # TODO T3CF use logger rather than EventLog
-      @instance = VCAP::Services::Mssql::NodeBin.new
+      @instance = VCAP::Services::MSSQL::NodeBin.new
       @event_log.report_event(:event_type => EventLog::INFO, :data => "Starting mssql_node_svc.rb oid: #{@instance.object_id}")
       @instance.start
     rescue => e

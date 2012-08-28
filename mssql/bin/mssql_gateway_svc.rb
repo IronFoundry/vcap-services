@@ -16,10 +16,10 @@ require 'base/gateway'
 $LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', 'lib')
 require 'mssql_service/provisioner'
 
-class VCAP::Services::Mssql::Gateway < VCAP::Services::Base::Gateway
+class VCAP::Services::MSSQL::Gateway < VCAP::Services::Base::Gateway
 
   def provisioner_class
-    VCAP::Services::Mssql::Provisioner
+    VCAP::Services::MSSQL::Provisioner
   end
 
   def default_config_file
@@ -32,7 +32,7 @@ class Daemon
   def service_main
     begin
       @event_log = EventLog.open('Application') # TODO T3CF use logger rather than EventLog
-      @instance = VCAP::Services::Mssql::Gateway.new
+      @instance = VCAP::Services::MSSQL::Gateway.new
       @event_log.report_event(:event_type => EventLog::INFO, :data => "Starting mssql_gateway_svc.rb oid: #{@instance.object_id}")
       @instance.start
     rescue => e
