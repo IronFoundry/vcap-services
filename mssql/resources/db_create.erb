@@ -5,7 +5,7 @@
 :error <%= sqlcmd_error_output_file %>
 
 :setvar DATA_DIR "<%= base_dir %>\sqldata"
-:setvar DB_NAME "<%= db_name %>"
+:setvar DB_NAME <%= db_name %>
 
 USE [master]
 GO

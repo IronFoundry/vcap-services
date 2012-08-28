@@ -1,0 +1,15 @@
+﻿-- vim:syntax=off:ts=2:sw=2
+
+:on error exit
+:out <%= sqlcmd_output_file %>
+:error <%= sqlcmd_error_output_file %>
+
+:setvar DB_NAME <%= db_name %>
+:setvar DB_USER <%= db_user %>
+
+USE [$(DB_NAME)]
+DROP USER $(DB_USER)
+GO
+USE [master]
+DROP LOGIN $(DB_USER)
+GO

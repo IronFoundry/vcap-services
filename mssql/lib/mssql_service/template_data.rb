@@ -1,10 +1,6 @@
+require 'erb'
 require 'tempfile'
-
-class Tempfile
-  def winpath
-    path.gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
-  end
-end
+require 'class_patches'
 
 module VCAP
   module Services
@@ -12,7 +8,9 @@ module VCAP
       module Node
         class BaseSqlcmdTemplateData
         class CreateDatabaseTemplateData < BaseSqlcmdTemplateData
+        class DropDatabaseTemplateData < BaseSqlcmdTemplateData
         class CreateLoginTemplateData < BaseSqlcmdTemplateData
+        class DropLoginTemplateData < BaseSqlcmdTemplateData
       end
     end
   end
@@ -20,23 +18,38 @@ end
 
 class VCAP::Services::Mssql::Node::BaseSqlcmdTemplateData
   
-  attr_reader :base_dir
   attr_reader :sqlcmd_output_file
   attr_reader :sqlcmd_error_output_file
 
-  def initialize(base_dir)
-    @base_dir = base_dir
+  def initialize(template_file, base_dir)
+    @erb = ERB.new(File.read(template_file))
     @sqlcmd_output_file = get_temp_file
     @sqlcmd_error_output_file = get_temp_file
   end
 
-  def get_binding
-    Kernel.binding
+  def to_sql
+    erb.result(Kernel.binding)
+  end
+
+  def has_error?
+    begin
+      File.size?(@sqlcmd_error_output_file) > 0
+    rescue Errno::ENOENT
+      false
+    end
+  end
+
+  def error_output
+    begin
+      File.read(@sqlcmd_error_output_file)
+    rescue Errno::ENOENT
+      nil
+    end
   end
 
   private
   def get_temp_file
-    rv = Tempfile.new('sqlcmd_data_')
+    rv = Tempfile.new('sqlcmd_output_')
     rv.close
     rv.path.gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
   end
@@ -45,16 +58,18 @@ end
 
 class VCAP::Services::Mssql::Node::CreateDatabaseTemplateData
 
+  attr_reader :base_dir
   attr_reader :db_name
   attr_reader :db_initial_size_kb
   attr_reader :db_max_size_mb
   attr_reader :db_initial_log_size_kb
   attr_reader :db_max_log_size_mb
 
-  def initialize(base_dir, db_name, init_sz_kb, max_sz_mb)
-    super(base_dir)
+  def initialize(template_file, base_dir, db_name, init_sz_mb, max_sz_mb)
+    super(template_file)
+    @base_dir = base_dir
     @db_name = db_name
-    @db_initial_size_kb = init_sz_kb
+    @db_initial_size_kb = init_sz_mb * 1024
     @db_initial_log_size_kb = @db_initial_size_kb
     @db_max_size_mb = max_sz_mb
     @db_max_log_size_mb = @db_max_size_mb * 2
@@ -67,10 +82,32 @@ class VCAP::Services::Mssql::Node::CreateLoginTemplateData
   attr_reader :db_user
   attr_reader :db_password
 
-  def initialize(base_dir, db_name, db_user, db_password)
-    super(base_dir)
+  def initialize(template_file, db_name, db_user, db_password)
+    super(template_file)
     @db_name = db_name
     @db_user = db_user
     @db_password = db_password
+  end
+end
+
+class VCAP::Services::Mssql::Node::DropDatabaseTemplateData
+
+  attr_reader :db_name
+
+  def initialize(template_file, db_name)
+    super(template_file)
+    @db_name = db_name
+  end
+end
+
+class VCAP::Services::Mssql::Node::DropLoginTemplateData
+
+  attr_reader :db_name
+  attr_reader :db_user
+
+  def initialize(template_file, db_name, db_user)
+    super(template_file)
+    @db_name = db_name
+    @db_user = db_user
   end
 end

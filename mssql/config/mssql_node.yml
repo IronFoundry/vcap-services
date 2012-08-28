@@ -12,7 +12,10 @@ logging:
   file: C:/IronFoundry/mssql/log/mssql_node.log
 pid: C:/IronFoundry/mssql/run/mssql_node.pid
 node_id: mssql_node_1
-max_db_size: 20
+
+max_db_size:     256 # Note: in MB
+initial_db_size:   4 # Note: in MB
+
 max_long_query: 3
 max_long_tx: 30
 kill_long_tx: true

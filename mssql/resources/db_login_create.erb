@@ -4,10 +4,14 @@
 :out <%= sqlcmd_output_file %>
 :error <%= sqlcmd_error_output_file %>
 
-CREATE LOGIN [<%= db_user %>] WITH PASSWORD = '<%= db_password %>', DEFAULT_DATABASE=[<%= db_name %>], CHECK_POLICY=OFF"
+:setvar DB_NAME <%= db_name %>
+:setvar DB_USER <%= db_user %>
+:setvar DB_PASSWORD <%= db_password %>
+
+CREATE LOGIN [$(DB_USER)] WITH PASSWORD = '$(DB_PASSWORD)', DEFAULT_DATABASE=[$(DB_NAME)], CHECK_POLICY=OFF"
 GO
-USE [<%= db_name %>]
+USE [$(DB_NAME)]
 GO
-CREATE USER [<%= db_user %>] FOR LOGIN [<%= db_user %>]
-EXEC [<%= db_name %>].[sys].[sp_addrolemember] 'db_owner', '<%= db_user %>'
+CREATE USER [$(DB_USER)] FOR LOGIN [$(DB_USER)]
+EXEC [$(DB_NAME)].[sys].[sp_addrolemember] 'db_owner', '$(DB_USER)'
 GO

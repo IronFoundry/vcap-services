@@ -1,0 +1,11 @@
+-- vim:syntax=off:ts=2:sw=2
+
+:on error exit
+:out <%= sqlcmd_output_file %>
+:error <%= sqlcmd_error_output_file %>
+
+:setvar DB_NAME <%= db_name %>
+
+USE [master]
+ALTER DATABASE [$(DB_NAME)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE
+DROP DATABASE [$(DB_NAME)]

@@ -11,22 +11,13 @@ require 'tiny_tds'
 require 'tempfile'
 
 require 'template_data'
+require 'class_patches'
 
 module VCAP
   module Services
     module Mssql
       class Node < VCAP::Services::Base::Node
       end
-    end
-  end
-end
-
-# TODO
-class File
-  class << self
-    alias orig_join join
-    def join(*args)
-      orig_join(*args).gsub(File::SEPARATOR, File::ALT_SEPARATOR || File::SEPARATOR)
     end
   end
 end
@@ -58,14 +49,22 @@ class VCAP::Services::Mssql::Node
   def initialize(options)
     super(options)
 
+    # database server credentials and info
     @mssql_config = options[:mssql]
+
     @sqlcmd_bin = verify_sqlcmd(options)
-    @db_create_template = options[:db_create_template]
-    @connection_wait_timeout = options[:connection_wait_timeout]
+    @connection_wait_timeout_secs = options[:connection_wait_timeout]
+
+    @db_create_template_file = options[:db_create_template_file]
+    @db_drop_template_file = options[:db_drop_template_file]
+    @db_login_create_template_file = options[:db_login_create_template_file]
+    @db_login_drop_template_file = options[:db_login_drop_template_file]
 
     @base_dir = options[:base_dir]
     FileUtils.mkdir_p(@base_dir) if @base_dir
 
+    @max_db_size_mb = options[:max_db_size] || 256 # Note: MB
+    @initial_db_size_mb = options[:initial_db_size] || 4 # Note: MB
   end
 
   def pre_send_announcement
@@ -123,7 +122,7 @@ class VCAP::Services::Mssql::Node
       begin
         return TinyTds::Client.new(
           :username => user, :password => password,
-          :host => host, :port => port, :login_timeout => @connection_wait_timeout)
+          :host => host, :port => port, :login_timeout => @connection_wait_timeout_secs)
       rescue TinyTds::Error => e
         @logger.error("MSSQL connection attempt to '#{host}' failed: #{e.to_s}")
         sleep(5)
@@ -182,8 +181,7 @@ class VCAP::Services::Mssql::Node
   def unprovision(name, credentials)
     return if name.nil?
     @logger.debug("Unprovision database:#{name}, bindings: #{credentials.inspect}")
-    provisioned_service = ProvisionedService.get(name)
-    raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) if provisioned_service.nil?
+    provisioned_service = get_instance(name)
     # TODO: validate that database files are not lingering
     # Delete all bindings, ignore not_found error since we are unprovision
     begin
@@ -208,8 +206,7 @@ class VCAP::Services::Mssql::Node
     @logger.debug("Bind service for db:#{name}, bind_opts = #{bind_opts}")
     binding = nil
     begin
-      service = ProvisionedService.get(name)
-      raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) unless service
+      service = get_instance(name)
       # create new credential for binding
       binding = Hash.new
       if credential
@@ -234,11 +231,7 @@ class VCAP::Services::Mssql::Node
     return if credential.nil?
     @logger.debug("Unbind service: #{credential.inspect}")
     name, user, bind_opts,passwd = %w(name user bind_opts password).map{|k| credential[k]}
-    service = ProvisionedService.get(name)
-    raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) unless service
-    # validate the existence of credential, in case we delete a normal account because of a malformed credential
-    # TODO T3CF res = @tds_client.query("SELECT * from mssql.user WHERE user='#{user}' AND password=PASSWORD('#{passwd}')")
-    # TODO T3CF raise MssqlError.new(MssqlError::MSSQL_CRED_NOT_FOUND, credential.inspect) if res.num_rows()<=0
+    service = get_instance(name)
     delete_database_user(name, user)
     true
   end
@@ -250,16 +243,10 @@ class VCAP::Services::Mssql::Node
 
     @logger.debug("Creating: #{provisioned_service.inspect}")
 
-    sqlcmd_output_file
-    sqlcmd_error_output_file
-    base_dir
-    database_name
-    database_initial_size_kb
-    database_max_size_mb
-    database_initial_log_size_kb
-    database_max_log_size_mb
-    # TODO MAXSIZE from config
-    create_statement = "CREATE DATABASE [#{name}] ON PRIMARY (NAME = N'#{name}', FILENAME = N'#{db_file_name}', SIZE = 4096KB, MAXSIZE = 64MB) LOG ON (NAME = N'#{name}_log', FILENAME = N'#{db_log_file_name}', SIZE = 4096KB, MAXSIZE = 128MB)"
+    tmpl_data = CreateDatabaseTemplateData.new(@db_create_template_file, @base_dir, name, @initial_db_size_mb, @max_db_size_mb)
+    unless run_template(tmpl_data)
+      raise MssqlError.new(MssqlError::MSSQL_CREATE_DB_FAILED, name)
+    end
 
     create_database_user(name, user, password)
 
@@ -267,81 +254,29 @@ class VCAP::Services::Mssql::Node
   end
 
   def create_database_user(name, user, password)
-      @logger.info("Creating credentials: #{user}/#{password} for database #{name}")
-      @tds_client.execute("CREATE LOGIN [#{user}] WITH PASSWORD = '#{password}', DEFAULT_DATABASE=[#{name}], CHECK_POLICY=OFF")
-      @tds_client.execute("USE [#{name}]; CREATE USER [#{user}] FOR LOGIN [#{user}]; EXEC [#{name}].[sys].[sp_addrolemember] 'db_owner', '#{user}'")
+    @logger.info("Creating credentials: #{user}/#{password} for database #{name}")
+    tmpl_data = CreateLoginTemplateData.new(@db_login_create_template_file, name, user, password)
+    unless run_template(tmpl_data)
+      raise MssqlError.new(MssqlError::MSSQL_CREATE_LOGIN_FAILED)
+    end
   end
 
   def delete_database(provisioned_service)
     name, user = [:name, :user].map { |field| provisioned_service.send(field) }
-    begin
-      delete_database_user(name, user)
-      @logger.info("Deleting database: #{name}")
-      @tds_client.do("USE [master]; ALTER DATABASE [#{name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [#{name}]")
-    rescue TinyTds::Error => e
-      @logger.fatal("Could not delete database: #{e.to_s}")
+    delete_database_user(name, user)
+    @logger.info("Deleting database: #{name}")
+    tmpl_data = DropDatabaseTemplateData.new(@db_drop_template_file, name)
+    unless run_template(tmpl_data)
+      raise MssqlError.new(MssqlError::MSSQL_DROP_DB_FAILED, name)
     end
   end
 
   def delete_database_user(name, user)
     @logger.info("Delete user #{user}")
-    @tds_client.do("USE [#{name}]; DROP USER #{user}") # TODO T3CF can't use parameters here due to use of sp_prepexec underneath, hmmm
-    @tds_client.do("DROP LOGIN #{user}")
-    kill_user_session(user)
-  rescue TinyTds::Error => e
-    @logger.fatal("Could not delete user '#{user}': #{e.to_s}")
-  end
-
-  def kill_user_session(user)
-    @logger.info("TODO Kill sessions of user: #{user}")
-    # begin
-    #   process_list = @tds_client.list_processes
-    #   process_list.each do |proc|
-    #     thread_id, user_, _, db, command, time, _, info = proc
-    #     if user_ == user then
-    #       @tds_client.query("KILL #{thread_id}")
-    #       @logger.info("Kill session: user:#{user} db:#{db}")
-    #     end
-    #   end
-    # rescue TinyTds::Error => e
-    #   # kill session failed error, only log it.
-    #   @logger.error("Could not kill user session.:#{e.to_s}")
-    # end
-  end
-
-  # restore a given instance using backup file.
-  def restore(name, backup_path)
-    @logger.debug("TODO Restore db #{name} using backup at #{backup_path}")
-    # service = ProvisionedService.get(name)
-    # raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) unless service
-    # # revoke write and lock privileges to prevent race with drop database.
-    # @tds_client.query("UPDATE db SET insert_priv='N', create_priv='N',
-    #                    update_priv='N', lock_tables_priv='N' WHERE Db='#{name}'")
-    # @tds_client.query("FLUSH PRIVILEGES")
-    # kill_database_session(name)
-    # # mssql can't delete tables that not in dump file.
-    # # recreate the database to prevent leave unclean tables after restore.
-    # @tds_client.query("DROP DATABASE #{name}")
-    # @tds_client.query("CREATE DATABASE #{name}")
-    # # restore privileges.
-    # @tds_client.query("UPDATE db SET insert_priv='Y', create_priv='Y',
-    #                    update_priv='Y', lock_tables_priv='Y' WHERE Db='#{name}'")
-    # @tds_client.query("FLUSH PRIVILEGES")
-    # host, user, pass =  %w{host user pass}.map { |opt| @mssql_config[opt] }
-    # path = File.join(backup_path, "#{name}.sql.gz")
-    # cmd ="#{@gzip_bin} -dc #{path}|" +
-    #   "#{@sqlcmd_bin} -h #{host} -u #{user} --password=#{pass}"
-    # cmd += " -S #{socket}" unless socket.nil?
-    # cmd += " #{name}"
-    # o, e, s = exe_cmd(cmd)
-    # if s.exitstatus == 0
-    #   return true
-    # else
-    #   return nil
-    # end
-  rescue => e
-    @logger.error("Error during restore #{e}")
-    nil
+    tmpl_data = DropLoginTemplateData.new(@db_drop_template_file, name, user)
+    unless run_template(tmpl_data)
+      raise MssqlError.new(MssqlError::MSSQL_DROP_LOGIN_FAILED)
+    end
   end
 
   # Disable all credentials and kill user sessions
@@ -353,49 +288,6 @@ class VCAP::Services::Mssql::Node
     end
     true
   rescue  => e
-    @logger.warn(e)
-    nil
-  end
-
-  # Dump db content into given path
-  # TODO TODO
-  def dump_instance(prov_cred, binding_creds, dump_file_path)
-    @logger.debug("TODO Dump instance #{prov_cred["name"]} request.")
-    # name = prov_cred["name"]
-    # host, user, password, port, socket =  %w{host user pass port socket}.map { |opt| @mssql_config[opt] }
-    # dump_file = File.join(dump_file_path, "#{name}.sql")
-    # @logger.info("Dump instance #{name} content to #{dump_file}")
-    # cmd = "#{@mssqldump_bin} -h #{host} -u #{user} --password=#{password} --single-transaction #{name} > #{dump_file}"
-    # o, e, s = exe_cmd(cmd)
-    # if s.exitstatus == 0
-    #   return true
-    # else
-    #   return nil
-    # end
-  rescue => e
-    @logger.warn(e)
-    nil
-  end
-
-  # Provision and import dump files
-  # Refer to #dump_instance
-  # TODO TODO
-  def import_instance(prov_cred, binding_creds, dump_file_path, plan)
-    @logger.debug("TODO Import instance #{prov_cred["name"]} request.")
-  # @logger.info("Provision an instance with plan: #{plan} using data from #{prov_cred.inspect}")
-  # provision(plan, prov_cred)
-  # name = prov_cred["name"]
-  # import_file = File.join(dump_file_path, "#{name}.sql")
-  # host, user, password, port, socket =  %w{host user pass port socket}.map { |opt| @mssql_config[opt] }
-  # @logger.info("Import data from #{import_file} to database #{name}")
-  # cmd = "#{@sqlcmd_bin} --host=#{host} --user=#{user} --password=#{password} #{name} < #{import_file}"
-  # o, e, s = exe_cmd(cmd)
-  # if s.exitstatus == 0
-  #   return true
-  # else
-  #   return nil
-  # end
-  rescue => e
     @logger.warn(e)
     nil
   end
@@ -464,6 +356,38 @@ class VCAP::Services::Mssql::Node
         return test_path
       end
     end
+  end
+
+  def run_template(tmpl_data)
+
+    sql_host = @mssql_config['host']
+    sql_user = @mssql_config['user']
+    sql_pass = @mssql_config['pass']
+
+    sqlcmd_input_file = Tempfile.new('sqlcmd_input_')
+    sqlcmd_rslt = true
+    begin
+      sql = tmpl_data.to_sql
+      @logger.debug("Executing sql: #{sql}")
+      sqlcmd_input_file.write(sql)
+      sqlcmd_input_file.close
+      infile = sqlcmd_input_file.winpath
+      @logger.debug("Executing: #{@sqlcmd_bin} -S #{sql_host} -U #{sql_user} -P #{sql_pass} -i #{infile}"
+      sqlcmd_rslt = system(@sqlcmd_bin, '-S', sql_host, '-U', sql_user, '-P', sql_pass, '-i', infile)
+      if sqlcmd_rslt == false or tmpl_data.has_error?
+        sqlcmd_rslt = false
+        @logger.error("Error in sqlcmd: #{tmpl_data.error_output}")
+      end
+    ensure
+      sqlcmd_input_file.unlink
+    end
+    return sqlcmd_rslt
+  end
+
+  def get_instance(instance_name)
+    instance = ProvisionedService.get(name)
+    raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) if instance.nil?
+    instance
   end
 
   def gen_credential(name, user, passwd)
