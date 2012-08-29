@@ -7,7 +7,7 @@ require 'bundler/setup'
 require 'vcap_services_base'
 
 $LOAD_PATH.unshift(File.expand_path("../../lib", __FILE__))
-require "mssql_service/node"
+require "mssql_service/mssql_node"
 
 class VCAP::Services::MSSQL::NodeBin < VCAP::Services::Base::NodeBin
 

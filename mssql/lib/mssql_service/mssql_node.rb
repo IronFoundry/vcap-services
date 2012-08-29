@@ -46,6 +46,7 @@ class VCAP::Services::MSSQL::Node
 
   def initialize(options)
     super(options)
+    @hostname = get_host
 
     # database server credentials and info
     @mssql_config = options[:mssql]
@@ -63,14 +64,15 @@ class VCAP::Services::MSSQL::Node
 
     @max_db_size_mb = options[:max_db_size] || 256 # Note: MB
     @initial_db_size_mb = options[:initial_db_size] || 4 # Note: MB
+
+    # DataMapper::Logger.new($stdout, :debug)
+    DataMapper.setup(:default, options[:local_db])
+    DataMapper::auto_upgrade!
   end
 
   def pre_send_announcement
     @tds_client = mssql_connect
     EM.add_periodic_timer(KEEP_ALIVE_INTERVAL) { mssql_keep_alive }
-
-    DataMapper.setup(:default, options[:local_db])
-    DataMapper::auto_upgrade!
 
     @capacity_lock.synchronize do
       ProvisionedService.all.each do |provisionedservice|
@@ -147,18 +149,19 @@ class VCAP::Services::MSSQL::Node
     @tds_client = mssql_connect
   end
 
-  def provision(plan, credential=nil)
+  def provision(plan, credentials=nil, version=nil)
+    raise MSSQLError.new(MSSQLError::MSSQL_INVALID_PLAN, plan) unless plan.to_s == @plan
     provisioned_service = ProvisionedService.new
-    if credential
-      name, user, password = %w(name user password).map{ |key| credential[key] }
+    if credentials
+      name, user, password = %w(name user password).map{ |key| credentials[key] }
       provisioned_service.name = name
       provisioned_service.user = user
       provisioned_service.password = password
     else
       # Note: mssql database name should start with alphabet character
       provisioned_service.name = 'd' + UUIDTools::UUID.random_create.to_s.delete('-')
-      provisioned_service.user = 'u' + generate_credential
-      provisioned_service.password = 'p' + generate_credential
+      provisioned_service.user = 'u' + generate_credentials
+      provisioned_service.password = 'p' + generate_credentials
     end
     provisioned_service.plan = plan
 
@@ -168,7 +171,7 @@ class VCAP::Services::MSSQL::Node
       @logger.error("Could not save entry: #{provisioned_service.errors.inspect}")
       raise MSSQLError.new(MSSQLError::MSSQL_LOCAL_DB_ERROR)
     end
-    response = gen_credential(provisioned_service.name, provisioned_service.user, provisioned_service.password)
+    response = gen_credentials(provisioned_service.name, provisioned_service.user, provisioned_service.password)
 
     return response
   rescue => e
@@ -388,11 +391,11 @@ class VCAP::Services::MSSQL::Node
     instance
   end
 
-  def gen_credential(name, user, passwd)
+  def gen_credentials(name, user, passwd)
     response = {
       "name"     => name,
-      "hostname" => @local_ip,
-      "host"     => @local_ip,
+      "hostname" => @hostname,
+      "host"     => @hostname,
       "port"     => @mssql_config['port'],
       "user"     => user,
       "username" => user,

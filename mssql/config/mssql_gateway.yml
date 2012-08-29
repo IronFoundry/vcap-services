@@ -11,11 +11,14 @@ service:
   version_aliases:
     "current" : "10.50.2500"
   timeout: 15
-ip_route: localhost
+
 #proxy:
 #   host: proxy
 #   port: 8080
 #   keepalive: true
+
+# ip_route: 127.0.0.1 # NB: optional, only set if necessary
+
 index: 0
 token: changemssqltoken
 logging:

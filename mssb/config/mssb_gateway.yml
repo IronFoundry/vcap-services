@@ -11,7 +11,6 @@ service:
   version_aliases:
     "current" : "1.0"
   timeout: 15
-ip_route: localhost
 #proxy:
 #   host: proxy
 #   port: 8080
@@ -34,3 +33,4 @@ node_timeout: 30 # NB: very important, related to op_time_limit
 # check_orphan_interval: 3600
 # double_check_orphan_interval: 300
 # max_nats_payload: 1048576
+# ip_route: 127.0.0.1 # NB: optional, only set if necessary

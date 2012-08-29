@@ -84,7 +84,6 @@ class VCAP::Services::MSSB::Node
 
   def initialize(options)
     super(options)
-    @supported_versions = ["1.0"]
     @hostname = get_host
     # DataMapper::Logger.new($stdout, :debug)
     DataMapper.setup(:default, options[:local_db])
@@ -137,7 +136,7 @@ class VCAP::Services::MSSB::Node
     exe_cmd("net user #{username} /delete")
   end
 
-  def provision(plan, credentials = nil, version=nil)
+  def provision(plan, credentials=nil, version=nil)
     raise MSSBError.new(MSSBError::MSSB_INVALID_PLAN, plan) unless plan.to_s == @plan
 
     instance = Provisionedservice.new

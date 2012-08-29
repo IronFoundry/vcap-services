@@ -4,7 +4,6 @@ plan: free
 local_db: sqlite3:C:/IronFoundry/mssql/db/mssql_node.db
 base_dir: C:/IronFoundry/mssql
 # sqlcmd_bin: 'C:/Program Files/Microsoft SQL Server/100/Tools/Binn/sqlcmd.exe' # Note: optional
-ip_route: localhost
 mbus: nats://nats:nats@192.168.171.129:4222
 index: 0
 logging:
@@ -32,6 +31,7 @@ mssql:
 connection_pool_size: 5
 connection_wait_timeout: 10
 
+# ip_route: 127.0.0.1 # NB: optional, only set if necessary
 # z_interval: 30
 # max_nats_payload: 1048576
 # fqdn_hosts: false
