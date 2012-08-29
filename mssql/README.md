@@ -6,7 +6,7 @@ SQL 2008 Setup:
 
 Git must be in system PATH. Installer here: http://code.google.com/p/msysgit/downloads/list?q=full+installer+official+git
 
-Install latest Ruby and DevKit (1.9.3 as of this writing). Download from: http://rubyinstaller.org/downloads/
+Install Ruby and DevKit (1.9.3 p125 works as of this writing, p194 crashes). Download from: http://rubyforge.org/frs/?group_id=167
 
 Assuming `C:\Ruby193` for Ruby and `C:\RubyDevKit` for Dev Kit
 
