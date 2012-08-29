@@ -7,13 +7,13 @@ gem "dm-sqlite-adapter"
 gem 'eventmachine', '>= 1.0.0.rc.4'
 gem "em-http-request"
 gem "json"
-gem "tiny_tds"
 gem "uuidtools"
 gem "ruby-hmac", :require => "hmac-sha1"
 gem "thin"
 gem "sinatra"
 gem "win32-service"
 gem "win32-eventlog"
+gem "tiny_tds"
 
 gem 'vcap_common', :require => ['vcap/common', 'vcap/component'], :git => 'git://github.com/IronFoundry/vcap-common.git', :branch => 'ironfoundry'
 gem 'vcap_logging', :require => ['vcap/logging'], :git => 'git://github.com/IronFoundry/common.git', :branch => 'ironfoundry'

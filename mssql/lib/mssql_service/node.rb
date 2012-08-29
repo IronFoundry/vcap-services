@@ -15,7 +15,7 @@ require 'class_patches'
 
 module VCAP
   module Services
-    module Mssql
+    module MSSQL
       class Node < VCAP::Services::Base::Node
       end
     end
@@ -27,14 +27,14 @@ require "mssql_service/util"
 require "mssql_service/storage_quota"
 require "mssql_service/mssql_error"
 
-class VCAP::Services::Mssql::Node
+class VCAP::Services::MSSQL::Node
 
   KEEP_ALIVE_INTERVAL = 15
   STORAGE_QUOTA_INTERVAL = 1
 
-  include VCAP::Services::Mssql::Util
-  include VCAP::Services::Mssql::Common
-  include VCAP::Services::Mssql
+  include VCAP::Services::MSSQL::Util
+  include VCAP::Services::MSSQL::Common
+  include VCAP::Services::MSSQL
 
   class ProvisionedService
     include DataMapper::Resource
@@ -168,7 +168,7 @@ class VCAP::Services::Mssql::Node
 
     if not provisioned_service.save
       @logger.error("Could not save entry: #{provisioned_service.errors.inspect}")
-      raise MssqlError.new(MssqlError::MSSQL_LOCAL_DB_ERROR)
+      raise MSSQLError.new(MSSQLError::MSSQL_LOCAL_DB_ERROR)
     end
     response = gen_credential(provisioned_service.name, provisioned_service.user, provisioned_service.password)
 
@@ -194,7 +194,7 @@ class VCAP::Services::Mssql::Node
 
     if not provisioned_service.destroy
       @logger.error("Could not delete service: #{provisioned_service.errors.inspect}")
-      raise MssqlError.new(MysqError::MSSQL_LOCAL_DB_ERROR)
+      raise MSSQLError.new(MysqError::MSSQL_LOCAL_DB_ERROR)
     end
 
     @logger.debug("Successfully fulfilled unprovision request: #{name}")
@@ -245,7 +245,7 @@ class VCAP::Services::Mssql::Node
 
     tmpl_data = CreateDatabaseTemplateData.new(@db_create_template_file, @base_dir, name, @initial_db_size_mb, @max_db_size_mb)
     unless run_template(tmpl_data)
-      raise MssqlError.new(MssqlError::MSSQL_CREATE_DB_FAILED, name)
+      raise MSSQLError.new(MSSQLError::MSSQL_CREATE_DB_FAILED, name)
     end
 
     create_database_user(name, user, password)
@@ -257,7 +257,7 @@ class VCAP::Services::Mssql::Node
     @logger.info("Creating credentials: #{user}/#{password} for database #{name}")
     tmpl_data = CreateLoginTemplateData.new(@db_login_create_template_file, name, user, password)
     unless run_template(tmpl_data)
-      raise MssqlError.new(MssqlError::MSSQL_CREATE_LOGIN_FAILED)
+      raise MSSQLError.new(MSSQLError::MSSQL_CREATE_LOGIN_FAILED)
     end
   end
 
@@ -267,7 +267,7 @@ class VCAP::Services::Mssql::Node
     @logger.info("Deleting database: #{name}")
     tmpl_data = DropDatabaseTemplateData.new(@db_drop_template_file, name)
     unless run_template(tmpl_data)
-      raise MssqlError.new(MssqlError::MSSQL_DROP_DB_FAILED, name)
+      raise MSSQLError.new(MSSQLError::MSSQL_DROP_DB_FAILED, name)
     end
   end
 
@@ -275,7 +275,7 @@ class VCAP::Services::Mssql::Node
     @logger.info("Delete user #{user}")
     tmpl_data = DropLoginTemplateData.new(@db_drop_template_file, name, user)
     unless run_template(tmpl_data)
-      raise MssqlError.new(MssqlError::MSSQL_DROP_LOGIN_FAILED)
+      raise MSSQLError.new(MSSQLError::MSSQL_DROP_LOGIN_FAILED)
     end
   end
 
@@ -303,7 +303,7 @@ class VCAP::Services::Mssql::Node
       binding_opts = v["binding_options"]
       bind(name, binding_opts, cred)
     end
-    # Mssql don't need to modify binding info TODO?
+    # MSSQL don't need to modify binding info TODO?
     return [prov_cred, binding_creds_hash]
   rescue => e
     @logger.warn(e)
@@ -317,18 +317,18 @@ class VCAP::Services::Mssql::Node
     if sqlcmd_bin.nil?
       sqlcmd_bin = search_path_for('sqlcmd.exe')
       if sqlcmd_bin.nil?
-        raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+        raise MSSQLError.new(MSSQLError::MSSQL_SQLCMD_NOT_FOUND)
       end
     end
 
     begin
       o, e, s = exe_cmd(sqlcmd_bin, '-?')
       if s.nil? or not s.success?
-        raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+        raise MSSQLError.new(MSSQLError::MSSQL_SQLCMD_NOT_FOUND)
       end
     rescue Errno::ENOENT => e
       @logger.error("Command not found: [#{e.to_s}]")
-      raise MssqlError.new(MssqlError::MSSQL_SQLCMD_NOT_FOUND)
+      raise MSSQLError.new(MSSQLError::MSSQL_SQLCMD_NOT_FOUND)
     end
 
     sqlcmd_bin
@@ -386,7 +386,7 @@ class VCAP::Services::Mssql::Node
 
   def get_instance(instance_name)
     instance = ProvisionedService.get(name)
-    raise MssqlError.new(MssqlError::MSSQL_CONFIG_NOT_FOUND, name) if instance.nil?
+    raise MSSQLError.new(MSSQLError::MSSQL_CONFIG_NOT_FOUND, name) if instance.nil?
     instance
   end
 

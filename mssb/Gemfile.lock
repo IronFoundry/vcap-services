@@ -8,10 +8,10 @@ GIT
 
 GIT
   remote: git://github.com/IronFoundry/vcap-common.git
-  revision: c16d848644c997c927ada6a7c8d033c22dfb8b32
+  revision: 0ba29b09df7c55920799b310f449dc1425a03393
   branch: ironfoundry
   specs:
-    vcap_common (2.0.5)
+    vcap_common (2.0.7)
       em-http-request (~> 1.0.0.beta3)
       eventmachine
       httpclient
@@ -26,10 +26,10 @@ GIT
 
 GIT
   remote: git://github.com/IronFoundry/vcap-services-base.git
-  revision: 2f01abbf1e76a30d07be776812cae6fadfc3f632
+  revision: 2bd7d8ca0b6c934c51f42a284ed4935cad64be52
   branch: ironfoundry
   specs:
-    vcap_services_base (0.1.13)
+    vcap_services_base (0.1.16)
       curb (~> 0.7.16)
       datamapper (~> 1.1.0)
       do_sqlite3 (~> 0.10.3)
@@ -64,11 +64,10 @@ GEM
   remote: http://rubygems.org/
   specs:
     addressable (2.2.8)
-    bcrypt-ruby (2.1.4)
     bcrypt-ruby (2.1.4-x86-mingw32)
     beefcake (0.3.7)
     builder (3.0.0)
-    ci_reporter (1.7.0)
+    ci_reporter (1.7.1)
       builder (>= 2.1.2)
     cookiejar (0.3.0)
     curb (0.7.18)
@@ -117,8 +116,6 @@ GEM
       uuidtools (~> 2.1.2)
     dm-validations (1.1.0)
       dm-core (~> 1.1.0)
-    do_sqlite3 (0.10.8)
-      data_objects (= 0.10.8)
     do_sqlite3 (0.10.8-x86-mingw32)
       data_objects (= 0.10.8)
     em-http-request (1.0.3)
@@ -129,15 +126,13 @@ GEM
       http_parser.rb (>= 0.5.3)
     em-socksify (0.2.1)
       eventmachine (>= 1.0.0.beta.4)
-    eventmachine (1.0.0.rc.4)
     eventmachine (1.0.0.rc.4-x86-mingw32)
     eventmachine_httpserver (0.2.1)
     fastercsv (1.5.5)
-    http_parser.rb (0.5.3)
     http_parser.rb (0.5.3-x86-mingw32)
     httpclient (2.2.7)
     json (1.4.6)
-    json_pure (1.7.4)
+    json_pure (1.7.5)
     macaddr (1.6.1)
       systemu (~> 2.5.0)
     membrane (0.0.2)
@@ -158,7 +153,7 @@ GEM
     redisk (0.2.2)
       redis (>= 0.1.1)
       redis-namespace (>= 0.1.0)
-    resque (1.21.0)
+    resque (1.22.0)
       multi_json (~> 1.0)
       redis-namespace (~> 1.0)
       sinatra (>= 0.9.2)
@@ -198,12 +193,9 @@ GEM
     uuidtools (2.1.3)
     vegas (0.1.11)
       rack (>= 1.0.0)
-    win32-api (1.4.8)
     win32-api (1.4.8-x86-mingw32)
     win32-eventlog (0.5.3)
       windows-pr (>= 0.9.3)
-    win32-service (0.7.2)
-      windows-pr (>= 1.0.8)
     win32-service (0.7.2-x86-mingw32)
       windows-pr (>= 1.0.8)
     windows-api (0.4.2)

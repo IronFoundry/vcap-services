@@ -7,6 +7,9 @@ service:
   plans: ["free"]
   default_plan: free
   tags: ["mssb", "mssb-1.0-beta", "message-queue", "Microsoft Service Bus"]
+  supported_versions: ["1.0"]
+  version_aliases:
+    "current" : "1.0"
   timeout: 15
 ip_route: localhost
 #proxy:
