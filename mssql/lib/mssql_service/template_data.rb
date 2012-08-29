@@ -5,36 +5,39 @@ require 'mssql_service/class_patches'
 
 module VCAP
   module Services
-    module Mssql
-      module Node
-        class BaseSqlcmdTemplateData; end
-        class CreateDatabaseTemplateData < BaseSqlcmdTemplateData; end
-        class DropDatabaseTemplateData < BaseSqlcmdTemplateData; end
-        class CreateLoginTemplateData < BaseSqlcmdTemplateData; end
-        class DropLoginTemplateData < BaseSqlcmdTemplateData; end
-      end
+    module MSSQL
+      class BaseSqlcmdTemplateData; end
+      class CreateDatabaseTemplateData < BaseSqlcmdTemplateData; end
+      class DropDatabaseTemplateData < BaseSqlcmdTemplateData; end
+      class CreateLoginTemplateData < BaseSqlcmdTemplateData; end
+      class DropLoginTemplateData < BaseSqlcmdTemplateData; end
     end
   end
 end
 
-class VCAP::Services::Mssql::Node::BaseSqlcmdTemplateData
+class VCAP::Services::MSSQL::BaseSqlcmdTemplateData
   
   attr_reader :sqlcmd_output_file
   attr_reader :sqlcmd_error_output_file
 
-  def initialize(template_file, base_dir)
+  def initialize(template_file)
     @erb = ERB.new(File.read(template_file))
     @sqlcmd_output_file = get_temp_file
     @sqlcmd_error_output_file = get_temp_file
   end
 
   def to_sql
-    erb.result(Kernel.binding)
+    @erb.result(Kernel.binding)
   end
 
   def has_error?
     begin
-      File.size?(@sqlcmd_error_output_file) > 0
+      sz = File.size?(@sqlcmd_error_output_file)
+      if sz.nil?
+        false
+      else
+        sz > 0
+      end
     rescue Errno::ENOENT
       false
     end
@@ -57,7 +60,7 @@ class VCAP::Services::Mssql::Node::BaseSqlcmdTemplateData
 
 end
 
-class VCAP::Services::Mssql::Node::CreateDatabaseTemplateData
+class VCAP::Services::MSSQL::CreateDatabaseTemplateData
 
   attr_reader :base_dir
   attr_reader :db_name
@@ -68,7 +71,7 @@ class VCAP::Services::Mssql::Node::CreateDatabaseTemplateData
 
   def initialize(template_file, base_dir, db_name, init_sz_mb, max_sz_mb)
     super(template_file)
-    @base_dir = base_dir
+    @base_dir = WinMethods.winpath(base_dir)
     @db_name = db_name
     @db_initial_size_kb = init_sz_mb * 1024
     @db_initial_log_size_kb = @db_initial_size_kb
@@ -77,7 +80,7 @@ class VCAP::Services::Mssql::Node::CreateDatabaseTemplateData
   end
 end
 
-class VCAP::Services::Mssql::Node::CreateLoginTemplateData
+class VCAP::Services::MSSQL::CreateLoginTemplateData
 
   attr_reader :db_name
   attr_reader :db_user
@@ -91,7 +94,7 @@ class VCAP::Services::Mssql::Node::CreateLoginTemplateData
   end
 end
 
-class VCAP::Services::Mssql::Node::DropDatabaseTemplateData
+class VCAP::Services::MSSQL::DropDatabaseTemplateData
 
   attr_reader :db_name
 
@@ -101,7 +104,7 @@ class VCAP::Services::Mssql::Node::DropDatabaseTemplateData
   end
 end
 
-class VCAP::Services::Mssql::Node::DropLoginTemplateData
+class VCAP::Services::MSSQL::DropLoginTemplateData
 
   attr_reader :db_name
   attr_reader :db_user

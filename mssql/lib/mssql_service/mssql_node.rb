@@ -13,8 +13,7 @@ require 'tempfile'
 module VCAP
   module Services
     module MSSQL
-      class Node < VCAP::Services::Base::Node
-      end
+      class Node < VCAP::Services::Base::Node; end
     end
   end
 end
@@ -36,12 +35,10 @@ class VCAP::Services::MSSQL::Node
 
   class ProvisionedService
     include DataMapper::Resource
-    property :name,       String,   :key => true
-    property :user,       String,   :required => true
-    property :password,   String,   :required => true
-    # property plan is deprecated. The instances in one node have same plan.
-    property :plan,       Integer,  :required => true
-    property :quota_exceeded,  Boolean, :default => false
+    property :name,           String,  :key => true
+    property :user,           String,  :required => true
+    property :password,       String,  :required => true
+    property :quota_exceeded, Boolean, :default => false
   end
 
   def initialize(options)
@@ -160,10 +157,9 @@ class VCAP::Services::MSSQL::Node
     else
       # Note: mssql database name should start with alphabet character
       provisioned_service.name = 'd' + UUIDTools::UUID.random_create.to_s.delete('-')
-      provisioned_service.user = 'u' + generate_credentials
-      provisioned_service.password = 'p' + generate_credentials
+      provisioned_service.user = 'u' + generate_credential
+      provisioned_service.password = 'p' + generate_credential
     end
-    provisioned_service.plan = plan
 
     create_database(provisioned_service)
 
@@ -175,20 +171,20 @@ class VCAP::Services::MSSQL::Node
 
     return response
   rescue => e
+    @logger.warn("Exception in provision: #{e}")
     delete_database(provisioned_service)
     raise
   end
 
-  def unprovision(name, credentials)
-    return if name.nil?
-    @logger.debug("Unprovision database:#{name}, bindings: #{credentials.inspect}")
-    provisioned_service = get_instance(name)
-    # TODO: validate that database files are not lingering
-    # Delete all bindings, ignore not_found error since we are unprovision
+  def unprovision(instance_id, credentials_list = [])
+    @logger.debug("Unprovision database: #{instance_id}, bindings: #{credentials_list.inspect}")
+
+    provisioned_service = get_instance(instance_id)
+
     begin
-      credentials.each{ |credential| unbind(credential)} if credentials
+      credentials_list.each { |credential| unbind(credential) }
     rescue => e
-      # ignore
+      @logger.warn("Exception in unprovision: #{e}")
     end
 
     delete_database(provisioned_service)
@@ -198,7 +194,7 @@ class VCAP::Services::MSSQL::Node
       raise MSSQLError.new(MysqError::MSSQL_LOCAL_DB_ERROR)
     end
 
-    @logger.debug("Successfully fulfilled unprovision request: #{name}")
+    @logger.debug("Successfully fulfilled unprovision request: #{instance_id}")
 
     true
   end
@@ -219,10 +215,11 @@ class VCAP::Services::MSSQL::Node
       end
       binding[:bind_opts] = bind_opts
       create_database_user(name, binding[:user], binding[:password])
-      response = gen_credential(name, binding[:user], binding[:password])
+      response = gen_credentials(name, binding[:user], binding[:password])
       @logger.debug("Bind response: #{response.inspect}")
       return response
     rescue => e
+      @logger.warn("Exception in bind: #{e}")
       delete_database_user(name, binding[:user]) if binding
       raise e
     end
@@ -231,7 +228,7 @@ class VCAP::Services::MSSQL::Node
   def unbind(credential)
     return if credential.nil?
     @logger.debug("Unbind service: #{credential.inspect}")
-    name, user, bind_opts,passwd = %w(name user bind_opts password).map{|k| credential[k]}
+    name, user = %w(name user).map{ |k| credential[k] }
     service = get_instance(name)
     delete_database_user(name, user)
     true
@@ -263,7 +260,8 @@ class VCAP::Services::MSSQL::Node
   end
 
   def delete_database(provisioned_service)
-    name, user = [:name, :user].map { |field| provisioned_service.send(field) }
+    name = provisioned_service.name
+    user = provisioned_service.user
     delete_database_user(name, user)
     @logger.info("Deleting database: #{name}")
     tmpl_data = DropDatabaseTemplateData.new(@db_drop_template_file, name)
@@ -386,8 +384,8 @@ class VCAP::Services::MSSQL::Node
   end
 
   def get_instance(instance_name)
-    instance = ProvisionedService.get(name)
-    raise MSSQLError.new(MSSQLError::MSSQL_CONFIG_NOT_FOUND, name) if instance.nil?
+    instance = ProvisionedService.get(instance_name)
+    raise MSSQLError.new(MSSQLError::MSSQL_CONFIG_NOT_FOUND, instance_name) if instance.nil?
     instance
   end
 
