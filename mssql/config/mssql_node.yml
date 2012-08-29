@@ -19,9 +19,9 @@ max_db_size:     256 # Note: in MB
 initial_db_size:   4 # Note: in MB
 
 max_long_query: 3
-max_long_tx: 30
-kill_long_tx: true
+max_long_tx: 30 # Note: in seconds
 max_user_conns: 20
+
 migration_nfs: C:/var/mnt/appcloud
 mssql:
   host: 127.0.0.1

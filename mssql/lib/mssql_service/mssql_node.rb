@@ -18,9 +18,9 @@ module VCAP
   end
 end
 
-require "mssql_service/common"
-require "mssql_service/util"
-require "mssql_service/mssql_error"
+require 'mssql_service/common'
+require 'mssql_service/util'
+require 'mssql_service/mssql_error'
 require 'mssql_service/template_data'
 require 'mssql_service/class_patches'
 
@@ -62,14 +62,19 @@ class VCAP::Services::MSSQL::Node
     @max_db_size_mb = options[:max_db_size] || 256 # Note: MB
     @initial_db_size_mb = options[:initial_db_size] || 4 # Note: MB
 
+    @max_long_tx = options[:max_long_tx]
+
     # DataMapper::Logger.new($stdout, :debug)
     DataMapper.setup(:default, options[:local_db])
     DataMapper::auto_upgrade!
+
+    @long_tx_killed = 0
   end
 
   def pre_send_announcement
     @tds_client = mssql_connect
-    EM.add_periodic_timer(KEEP_ALIVE_INTERVAL) { mssql_keep_alive }
+
+    check_db_consistency
 
     @capacity_lock.synchronize do
       ProvisionedService.all.each do |provisionedservice|
@@ -77,7 +82,8 @@ class VCAP::Services::MSSQL::Node
       end
     end
 
-    check_db_consistency
+    EM.add_periodic_timer(KEEP_ALIVE_INTERVAL) { mssql_keep_alive }
+    EM.add_periodic_timer(@max_long_tx.to_f / 2) { kill_long_transaction } if @max_long_tx > 0
   end
 
   def announcement
@@ -307,6 +313,35 @@ class VCAP::Services::MSSQL::Node
   rescue => e
     @logger.warn(e)
     []
+  end
+
+  def kill_long_transaction
+    sql = <<-eosql
+      SELECT * FROM (SELECT
+        [session_id], [user_id],
+        [database_id], ISNULL([total_elapsed_time]/1000,0) AS [elapsed_seconds],
+        [query].[text]
+      FROM
+        [sys].[dm_exec_requests] [r]
+      CROSS APPLY
+        [sys].[dm_exec_sql_text]([r].[sql_handle]) AS [query]) AS [queries]
+      WHERE
+        [queries].[elapsed_seconds] >= #{@max_long_tx} AND
+        [user_id] > 1 AND [database_id] > 4
+    eosql
+    result_set = @tds_client.execute(sql)
+    killable = []
+    result_set.each do |row|
+      killable << [ row['session_id'], row['user_id'], row['text'] ]
+    end
+    killable.each do |k|
+      session_id = k[0]
+      @tds_client.execute("KILL #{session_id}")
+      @logger.info("Killed user: #{k[1]} text: #{k[2]}")
+      @long_tx_killed += 1
+    end
+  rescue TinyTds::Error => e
+    @logger.warn("SQL error: #{e}")
   end
 
   def verify_sqlcmd(options)
