@@ -10,9 +10,6 @@ require 'open3'
 require 'tiny_tds'
 require 'tempfile'
 
-require 'template_data'
-require 'class_patches'
-
 module VCAP
   module Services
     module MSSQL
@@ -24,8 +21,9 @@ end
 
 require "mssql_service/common"
 require "mssql_service/util"
-require "mssql_service/storage_quota"
 require "mssql_service/mssql_error"
+require 'mssql_service/template_data'
+require 'mssql_service/class_patches'
 
 class VCAP::Services::MSSQL::Node
 
@@ -138,7 +136,7 @@ class VCAP::Services::MSSQL::Node
     if @tds_client.active?
       result = @tds_client.execute('SELECT @@VERSION AS [VERSION]')
       result.each(:as => :array, :cache_rows => false, :first => true) do |row|
-        @logger.debug("mssql_keep_alive: '#{row[0]}'"
+        @logger.debug("mssql_keep_alive: '#{row[0]}'")
       end
     else
       @tds_client.close
@@ -372,7 +370,7 @@ class VCAP::Services::MSSQL::Node
       sqlcmd_input_file.write(sql)
       sqlcmd_input_file.close
       infile = sqlcmd_input_file.winpath
-      @logger.debug("Executing: #{@sqlcmd_bin} -S #{sql_host} -U #{sql_user} -P #{sql_pass} -i #{infile}"
+      @logger.debug("Executing: #{@sqlcmd_bin} -S #{sql_host} -U #{sql_user} -P #{sql_pass} -i #{infile}")
       sqlcmd_rslt = system(@sqlcmd_bin, '-S', sql_host, '-U', sql_user, '-P', sql_pass, '-i', infile)
       if sqlcmd_rslt == false or tmpl_data.has_error?
         sqlcmd_rslt = false

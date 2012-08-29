@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 # -*- mode: ruby -*-
+#
+# Copyright (c) 2009-2011 VMware, Inc.
 
 require 'win32/daemon'
 require 'win32/eventlog'

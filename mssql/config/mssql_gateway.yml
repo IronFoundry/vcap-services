@@ -22,7 +22,7 @@ logging:
   level: debug
   # file: C:/IronFoundry/mssql/log/mssql_gateway.log
 mbus: nats://nats:nats@192.168.171.129:4222
-pid: C:/IronFoundry/mssql/run/mssql_service.pid
+pid: C:/IronFoundry/mssql/run/mssql_gateway.pid
 node_timeout: 2
 
 # TODO

@@ -26,7 +26,7 @@ GIT
 
 GIT
   remote: git://github.com/IronFoundry/vcap-services-base.git
-  revision: bcfca33351150d21970c11f1578b559a7c002906
+  revision: 2bd7d8ca0b6c934c51f42a284ed4935cad64be52
   branch: ironfoundry
   specs:
     vcap_services_base (0.1.16)

@@ -22,7 +22,7 @@ class VCAP::Services::MSSQL::NodeBin < VCAP::Services::Base::NodeBin
 
   def additional_config(options, config)
     options[:mssql] = parse_property(config, "mssql", Hash)
-    options[:sqlcmd_bin] = parse_property(config, "sqlcmd_bin", String)
+    options[:sqlcmd_bin] = parse_property(config, "sqlcmd_bin", String, :optional => true)
 
     # erb templates
     options[:db_create_template_file] = File.expand_path("../../resources/db_create.erb", __FILE__)

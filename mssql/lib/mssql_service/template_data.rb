@@ -1,16 +1,17 @@
 require 'erb'
 require 'tempfile'
-require 'class_patches'
+
+require 'mssql_service/class_patches'
 
 module VCAP
   module Services
     module Mssql
       module Node
-        class BaseSqlcmdTemplateData
-        class CreateDatabaseTemplateData < BaseSqlcmdTemplateData
-        class DropDatabaseTemplateData < BaseSqlcmdTemplateData
-        class CreateLoginTemplateData < BaseSqlcmdTemplateData
-        class DropLoginTemplateData < BaseSqlcmdTemplateData
+        class BaseSqlcmdTemplateData; end
+        class CreateDatabaseTemplateData < BaseSqlcmdTemplateData; end
+        class DropDatabaseTemplateData < BaseSqlcmdTemplateData; end
+        class CreateLoginTemplateData < BaseSqlcmdTemplateData; end
+        class DropLoginTemplateData < BaseSqlcmdTemplateData; end
       end
     end
   end

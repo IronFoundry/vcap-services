@@ -8,13 +8,12 @@ require 'win32/eventlog'
 
 include Win32
 
-ENV["BUNDLE_GEMFILE"] ||= File.expand_path('../../Gemfile', __FILE__)
-
-$LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', '..', 'base', 'lib')
-require 'base/gateway'
+ENV["BUNDLE_GEMFILE"] ||= File.expand_path("../../Gemfile", __FILE__)
+require "bundler/setup"
+require "vcap_services_base"
 
 $LOAD_PATH.unshift File.join(File.dirname(__FILE__), '..', 'lib')
-require 'mssql_service/provisioner'
+require 'mssql_service/mssql_provisioner'
 
 class VCAP::Services::MSSQL::Gateway < VCAP::Services::Base::Gateway
 
@@ -23,7 +22,8 @@ class VCAP::Services::MSSQL::Gateway < VCAP::Services::Base::Gateway
   end
 
   def default_config_file
-    File.join(File.dirname(__FILE__), '..', 'config', 'mssql_gateway.yml')
+    config_base_dir = ENV["CLOUD_FOUNDRY_CONFIG_PATH"] || File.join(File.dirname(__FILE__), "..", "config")
+    File.join(config_base_dir, "mssql_gateway.yml")
   end
 
 end
@@ -31,7 +31,7 @@ end
 class Daemon
   def service_main
     begin
-      @event_log = EventLog.open('Application') # TODO T3CF use logger rather than EventLog
+      @event_log = EventLog.open('Application')
       @instance = VCAP::Services::MSSQL::Gateway.new
       @event_log.report_event(:event_type => EventLog::INFO, :data => "Starting mssql_gateway_svc.rb oid: #{@instance.object_id}")
       @instance.start
