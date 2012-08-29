@@ -266,15 +266,15 @@ class VCAP::Services::MSSQL::Node
     @logger.info("Deleting database: #{name}")
     tmpl_data = DropDatabaseTemplateData.new(@db_drop_template_file, name)
     unless run_template(tmpl_data)
-      raise MSSQLError.new(MSSQLError::MSSQL_DROP_DB_FAILED, name)
+      @logger.warn("Error in dropping database #{name}.")
     end
   end
 
   def delete_database_user(name, user)
     @logger.info("Delete user #{user}")
-    tmpl_data = DropLoginTemplateData.new(@db_drop_template_file, name, user)
-    unless run_template(tmpl_data)
-      raise MSSQLError.new(MSSQLError::MSSQL_DROP_LOGIN_FAILED)
+    tmpl_data = DropLoginTemplateData.new(@db_login_drop_template_file, name, user)
+    unless run_template(tmpl_data) # Ignore error
+      @logger.warn("Error in dropping user #{user} from db #{name}.")
     end
   end
 
