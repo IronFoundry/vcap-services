@@ -8,7 +8,7 @@ GIT
 
 GIT
   remote: git://github.com/IronFoundry/vcap-common.git
-  revision: 0ba29b09df7c55920799b310f449dc1425a03393
+  revision: 66d8c74b72d282c40e289b2a654592874c6cf2c7
   branch: ironfoundry
   specs:
     vcap_common (2.0.7)
