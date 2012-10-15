@@ -2,15 +2,16 @@
 require 'fiber'
 require 'nats/client'
 require 'uri'
+require 'timeout'
 
 require 'vcap/component'
+require_relative 'cc_client'
 
 module VCAP
   module Services
     module Marketplace
       class MarketplaceAsyncServiceGateway < VCAP::Services::AsynchronousServiceGateway
 
-        API_VERSION = "v1"
         REQ_OPTS    = %w(mbus external_uri token cloud_controller_uri).map {|o| o.to_sym}
 
         set :raise_errors, Proc.new {false}
@@ -18,6 +19,32 @@ module VCAP
 
         def initialize(opts)
           super(opts)
+        end
+
+        def load_cc_client(opts)
+          token_hdrs = VCAP::Services::Api::GATEWAY_TOKEN_HEADER
+          cc_req_hdrs = {
+            'Content-Type' => 'application/json',
+            token_hdrs     => @token,
+          }
+
+          cld_ctrl_uri     = http_uri(opts[:cloud_controller_uri] || "api.vcap.me")
+          cc_api_version   = opts[:cc_version] || "v1"
+
+          @logger.info("CloudController API version: #{cc_api_version}")
+          if cc_api_version == "v1"
+            VCAP::Services::Marketplace::CloudControllerClient.new(
+            {
+              :service_list_uri => "#{cld_ctrl_uri}/proxied_services/v1/offerings",
+              :offering_uri =>  "#{cld_ctrl_uri}/services/v1/offerings",
+              :cc_req_hdrs => cc_req_hdrs,
+              :marketplace_client_name => @marketplace_client.name,
+              :logger => @logger,
+              :proxy => opts[:proxy]
+            })
+          else
+            raise "Cloud Controller client unknown for version: #{cc_api_version}"
+          end
         end
 
         def load_marketplace(opts)
@@ -50,9 +77,7 @@ module VCAP
           @token                 = opts[:token]
           @index                 = opts[:index] || 0
           @hb_interval           = opts[:heartbeat_interval] || 60
-          @cld_ctrl_uri          = http_uri(opts[:cloud_controller_uri] || "api.vcap.me")
-          @offering_uri          = "#{@cld_ctrl_uri}/services/#{API_VERSION}/offerings"
-          @service_list_uri      = "#{@cld_ctrl_uri}/proxied_services/#{API_VERSION}/offerings"
+
           @proxy_opts            = opts[:proxy]
           @handle_fetched        = true # set to true in order to compatible with base asycn gateway.
 
@@ -73,14 +98,9 @@ module VCAP
           }.to_json
 
           @catalog = {}
-
-          token_hdrs = VCAP::Services::Api::GATEWAY_TOKEN_HEADER
-          @cc_req_hdrs           = {
-            'Content-Type' => 'application/json',
-            token_hdrs     => @token,
-          }
-
           @marketplace_gateway_varz_details = {}
+
+          @cc_client = load_cc_client(opts)
 
           Kernel.at_exit do
             if EM.reactor_running?
@@ -101,7 +121,7 @@ module VCAP
 
           z_interval = opts[:z_interval] || 30
           EM.add_periodic_timer(z_interval) do
-           EM.defer { update_varz }
+            EM.defer { update_varz }
           end
 
           @stats_lock = Mutex.new
@@ -178,18 +198,20 @@ module VCAP
             @catalog_in_ccdb = get_proxied_services_from_cc
           rescue => e
             failed = true
-            @logger.error("Failed to get proxied services from cc: #{e}")
+            @logger.error("Failed to get proxied services from cc: #{e.inspect}")
           ensure
             update_stats("refresh_cc_services", failed)
           end
 
           failed = false
           begin
-            @catalog_in_marketplace = @marketplace_client.get_catalog
+            Timeout::timeout(@node_timeout) do
+              @catalog_in_marketplace = @marketplace_client.get_catalog
+            end
           rescue => e1
             failed = true
-            @logger.error("Failed to get catalog from marketplace: #{e1}")
-          rescue
+            @logger.error("Failed to get catalog from marketplace: #{e1.inspect}")
+          ensure
             update_stats("refresh_catalog", failed)
           end
         end
@@ -199,15 +221,23 @@ module VCAP
           deactivate_disabled_services
 
           # Process all services currently in marketplace
-          @catalog_in_marketplace.each do |label, bsvc|
-            req = @marketplace_client.generate_cc_advertise_request(bsvc["id"], bsvc, active)
-            advertise_service_to_cc(req)
+          if @catalog_in_marketplace
+            @catalog_in_marketplace.each do |label, bsvc|
+              req = @marketplace_client.generate_cc_advertise_request(bsvc["id"], bsvc, active)
+              advertise_service_to_cc(req)
+            end
+            @marketplace_gateway_varz_details[:active_offerings] = @catalog_in_marketplace.size
+         else
+            @logger.warn("Marketplace catalog was not retrieved, nothing to advertise")
           end
-
-          @marketplace_gateway_varz_details[:active_offerings] = @catalog_in_marketplace.size
         end
 
         def deactivate_disabled_services
+          if !(@catalog_in_marketplace && @catalog_in_ccdb)
+            @logger.warn("Check for disabled services could not be made since the catalog from either marketplace or ccdb could not be retrieved")
+            return
+          end
+
           disabled_count = 0
 
           current_offerings = []
@@ -290,14 +320,14 @@ module VCAP
 
         # Helpers for unit testing
         post "/marketplace/set/:key/:value" do
-          @logger.info("TEST HELPER ENDPOINT - set: #{params[:key]} = #{params[:value]}")
+          @logger.info("TEST HELPER ENDPOINT - set: key=#{params[:key]}, value=#{params[:value]}")
           Fiber.new {
             begin
               @marketplace_client.set_config(params[:key], params[:value])
               refresh_catalog_and_update_cc
               async_reply("")
             rescue => e
-              async_reply_error(e.inspect)
+              reply_error(e.inspect)
             end
           }.resume
           async_mode
@@ -314,12 +344,14 @@ module VCAP
           Fiber.new{
             failed = false
             begin
-              msg = @marketplace_client.provision_service(request_body)
+              msg = Timeout::timeout(@node_timeout) do
+                @marketplace_client.provision_service(request_body)
+              end
               resp = VCAP::Services::Api::GatewayHandleResponse.new(msg).encode
               async_reply(resp)
             rescue => e
               failed = true
-              async_reply_error(e.inspect)
+              reply_error(e.inspect)
             ensure
               update_stats("provision", failed)
             end
@@ -336,12 +368,14 @@ module VCAP
           Fiber.new {
             failed = false
             begin
-              msg = @marketplace_client.bind_service_instance(params['service_id'], req)
+              msg = Timeout::timeout(@node_timeout) do
+                @marketplace_client.bind_service_instance(params['service_id'], req)
+              end
               resp = VCAP::Services::Api::GatewayHandleResponse.new(msg).encode
               async_reply(resp)
             rescue => e
               failed = true
-              async_reply_error(e.inspect)
+              reply_error(e.inspect)
             ensure
               update_stats("bind", failed)
             end
@@ -356,11 +390,13 @@ module VCAP
           Fiber.new {
             failed = false
             begin
-              @marketplace_client.unprovision_service(sid)
+              Timeout::timeout(@node_timeout) do
+                @marketplace_client.unprovision_service(sid)
+              end
               async_reply
             rescue => e
               failed = true
-              async_reply_error(e.inspect)
+              reply_error(e.inspect)
             ensure
               update_stats("unprovision", failed)
             end
@@ -376,11 +412,13 @@ module VCAP
           Fiber.new {
             failed = false
             begin
-              @marketplace_client.unbind_service(sid, hid)
+              Timeout::timeout(@node_timeout) do
+                @marketplace_client.unbind_service(sid, hid)
+              end
               async_reply
             rescue => e
               failed = true
-              async_reply_error(e.inspect)
+              reply_error(e.inspect)
             ensure
               update_stats("unbind", failed)
             end
@@ -393,87 +431,18 @@ module VCAP
         #
         helpers do
 
+          def reply_error(resp='{}')
+            async_reply_raw(500, {'Content-Type' => Rack::Mime.mime_type('.json')}, resp)
+          end
+
           def get_proxied_services_from_cc
-            @logger.debug("Get proxied services from cloud_controller: #{@service_list_uri}")
-            services = {}
-            req = create_http_request( :head => @cc_req_hdrs )
-
-            f = Fiber.current
-            http = EM::HttpRequest.new(@service_list_uri).get(req)
-            http.callback { f.resume(http) }
-            http.errback { f.resume(http) }
-            Fiber.yield
-
-            if http.error.empty?
-              if http.response_header.status == 200
-                resp = VCAP::Services::Api::ListProxiedServicesResponse.decode(http.response)
-                resp.proxied_services.each {|bsvc|
-                  @logger.info("Fetch #{@marketplace_client.name} service from CC: label=#{bsvc["label"]} - #{bsvc.inspect}")
-                  services[bsvc["label"]] = bsvc
-                }
-              else
-                @logger.warn("Failed to fetch #{@marketplace_client.name} service from CC - status=#{http.response_header.status}")
-              end
-            else
-              @logger.warn("Failed to fetch #{@marketplace_client.name} service from CC: #{http.error}")
-            end
-
-            return services
+            @cc_client.get_proxied_services_from_cc
           end
 
           def advertise_service_to_cc(offering)
-            @logger.debug("advertise service offering #{offering.inspect} to cloud_controller: #{@offering_uri}")
-            return false unless offering
-
-            req = create_http_request(
-              :head => @cc_req_hdrs,
-              :body => Yajl::Encoder.encode(offering),
-            )
-
-            f = Fiber.current
-            http = EM::HttpRequest.new(@offering_uri).post(req)
-            http.callback { f.resume(http) }
-            http.errback { f.resume(http) }
-            Fiber.yield
-
-            if http.error.empty?
-              if http.response_header.status == 200
-                @logger.info("Successfully advertise offerings #{offering.inspect}")
-                update_stats("advertise_services", false)
-                return true
-              else
-                @logger.warn("Failed advertise offerings:#{offering.inspect}, status=#{http.response_header.status}")
-              end
-            else
-              @logger.warn("Failed advertise offerings:#{offering.inspect}: #{http.error}")
-            end
-
-            update_stats("advertise_services", true)
-            return false
-          end
-
-          def delete_offerings(label)
-            return false unless label
-
-            req = create_http_request(:head => @cc_req_hdrs)
-            uri = URI.join(@offering_uri, label)
-            f = Fiber.current
-            http = EM::HttpRequest.new(uri).delete(req)
-            http.callback { f.resume(http) }
-            http.errback { f.resume(http) }
-            Fiber.yield
-
-            if http.error.empty?
-              if http.response_header.status == 200
-                @logger.info("Successfully delete offerings label=#{label}")
-                return true
-              else
-                @logger.warn("Failed delete offerings label=#{label}, status=#{http.response_header.status}")
-              end
-            else
-              @logger.warn("Failed delete offerings label=#{label}: #{http.error}")
-            end
-            return false
+            result = @cc_client.advertise_service_to_cc(offering)
+            update_stats("advertise_services", !result)
+            result
           end
 
           def fmt_error(e)
